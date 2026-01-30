@@ -1,12 +1,20 @@
 # MEDrecord Architecture
 
-> **Version:** 1.0.0  
+> **Version:** 1.1.0  
 > **Last Updated:** January 2026  
 > **Status:** Approved
 
 ## Overview
 
 MEDrecord is an intelligent, agent-driven layer around existing healthcare systems (EPDs/ECDs). This document describes the gateway-first architecture that enables secure, role-aware data access through modern desktop applications.
+
+**This is an example project for healthcare researchers.** All users who access the application are tracked to understand adoption and usage patterns.
+
+### Target Audience
+
+- Healthcare researchers exploring agent-driven workflows
+- Developers learning the MEDrecord architecture
+- Organizations evaluating the platform for their use cases
 
 ## Core Principles
 
@@ -46,6 +54,41 @@ External-facing contracts use FHIR-compatible semantics. Internal implementation
 ### 4. Privacy by Design
 
 All designs must comply with EHDS regulations and implement Privacy Enhancing Technologies (PET).
+
+### 5. Researcher Tracking
+
+All users accessing the example application are tracked:
+
+```typescript
+interface ResearcherRecord {
+  id: string;                     // Gateway user ID
+  email: string;
+  name: string;
+  organization?: string;
+  
+  // Access tracking
+  firstAccessAt: string;          // ISO timestamp
+  lastAccessAt: string;
+  accessCount: number;
+  
+  // Research context  
+  tenantId: string;               // Assigned research tenant
+  purpose?: string;               // Self-reported research purpose
+  
+  // Consent
+  acceptedTermsAt?: string;
+  marketingConsent: boolean;
+}
+```
+
+### 6. Multi-Tenant Architecture
+
+Each research group operates in an isolated tenant:
+
+- **Data Isolation**: All FHIR resources scoped to tenant
+- **Configuration**: Tenant-specific agent configurations
+- **Branding**: Optional custom branding per tenant
+- **Users**: Researchers assigned to specific tenants
 
 ---
 
