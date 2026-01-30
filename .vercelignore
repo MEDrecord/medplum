@@ -1,0 +1,8 @@
+packages/
+examples/
+scripts/
+*.md
+!app/
+!lib/
+!components/
+!public/
