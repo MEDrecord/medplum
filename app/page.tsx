@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
@@ -16,13 +16,13 @@ export default function HomePage() {
               className="h-10 w-10"
             />
             <div className="flex flex-col">
-              <span className="text-xl font-semibold text-[hsl(var(--primary))]">
+              <span className="text-xl font-semibold text-primary">
                 MED<span className="font-normal text-foreground">record</span>
               </span>
               <span className="text-xs text-muted-foreground">eHealth platform as a Service</span>
             </div>
           </div>
-          <nav className="flex items-center gap-4">
+          <nav className="flex items-center gap-6">
             <Link
               href="/docs"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -31,7 +31,7 @@ export default function HomePage() {
             </Link>
             <Link
               href="/login"
-              className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity"
             >
               Sign In
             </Link>
@@ -42,10 +42,10 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="mx-auto max-w-6xl px-6 py-24">
         <div className="mx-auto max-w-3xl text-center">
-          <span className="inline-block rounded-full bg-[hsl(var(--primary))]/10 px-4 py-1.5 text-sm font-medium text-[hsl(var(--primary))] mb-6">
+          <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary mb-6">
             Research Example Application
           </span>
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-balance">
+          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl lg:text-6xl text-balance text-foreground">
             Agent-Driven Healthcare Workflows
           </h1>
           <p className="mt-6 text-lg text-muted-foreground leading-relaxed text-pretty">
@@ -56,13 +56,13 @@ export default function HomePage() {
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/login"
-              className="w-full sm:w-auto rounded-lg bg-[hsl(var(--accent))] px-8 py-3 text-base font-semibold text-[hsl(var(--accent-foreground))] hover:opacity-90 transition-opacity"
+              className="w-full sm:w-auto rounded-lg bg-accent px-8 py-3 text-base font-semibold text-accent-foreground hover:opacity-90 transition-opacity"
             >
               Get Started
             </Link>
             <Link
               href="/agents"
-              className="w-full sm:w-auto rounded-lg border-2 border-[hsl(var(--primary))] bg-transparent px-8 py-3 text-base font-medium text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/5 transition-colors"
+              className="w-full sm:w-auto rounded-lg border-2 border-primary bg-transparent px-8 py-3 text-base font-medium text-primary hover:bg-primary/5 transition-colors"
             >
               Explore Agents
             </Link>
@@ -73,7 +73,7 @@ export default function HomePage() {
       {/* Features Section */}
       <section className="border-t border-border bg-muted/50">
         <div className="mx-auto max-w-6xl px-6 py-24">
-          <h2 className="text-center text-2xl font-bold mb-4">
+          <h2 className="text-center text-2xl font-bold mb-4 text-foreground">
             What You Can Explore
           </h2>
           <p className="text-center text-muted-foreground mb-12 max-w-2xl mx-auto">
@@ -112,7 +112,7 @@ export default function HomePage() {
       </section>
 
       {/* Trust Section */}
-      <section className="border-t border-border">
+      <section className="border-t border-border bg-card">
         <div className="mx-auto max-w-6xl px-6 py-16">
           <div className="grid gap-8 md:grid-cols-4 text-center">
             <TrustItem label="FHIR R4" sublabel="Compliant" />
@@ -124,17 +124,17 @@ export default function HomePage() {
       </section>
 
       {/* Researcher Notice */}
-      <section className="border-t border-border bg-[hsl(var(--primary))]/5">
+      <section className="border-t border-border bg-primary/5">
         <div className="mx-auto max-w-6xl px-6 py-12">
-          <div className="rounded-xl border border-[hsl(var(--primary))]/20 bg-card p-6 shadow-sm">
+          <div className="rounded-xl border border-primary/20 bg-card p-6">
             <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--teal))] text-white">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal text-teal-foreground">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
               <div>
-                <h3 className="font-semibold">Researcher Tracking Notice</h3>
+                <h3 className="font-semibold text-foreground">Researcher Tracking Notice</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   This is an example application for healthcare researchers. By signing in,
                   you agree that your access will be logged to help us understand platform
@@ -148,7 +148,7 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border bg-[hsl(var(--foreground))]">
+      <footer className="border-t border-border bg-foreground">
         <div className="mx-auto max-w-6xl px-6 py-12">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3">
@@ -161,19 +161,19 @@ export default function HomePage() {
                 className="h-10 w-auto"
               />
             </div>
-            <div className="flex items-center gap-6 text-sm text-white/70">
-              <Link href="https://medrecord.io" className="hover:text-white transition-colors">
+            <div className="flex items-center gap-6 text-sm text-background/70">
+              <Link href="https://medrecord.io" className="hover:text-background transition-colors">
                 MEDrecord.io
               </Link>
-              <Link href="https://healthtalk.ai" className="hover:text-white transition-colors">
+              <Link href="https://healthtalk.ai" className="hover:text-background transition-colors">
                 HealthTalk.ai
               </Link>
-              <Link href="/privacy" className="hover:text-white transition-colors">
+              <Link href="/privacy" className="hover:text-background transition-colors">
                 Privacy Policy
               </Link>
             </div>
           </div>
-          <div className="mt-8 pt-6 border-t border-white/10 text-center text-xs text-white/50">
+          <div className="mt-8 pt-6 border-t border-background/10 text-center text-xs text-background/50">
             Part of the MEDrecord ecosystem: MedSafe, Coachi, HealthTalk
           </div>
         </div>
@@ -192,11 +192,11 @@ function FeatureCard({
   icon: React.ReactNode
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[hsl(var(--teal))] text-white">
+    <div className="rounded-xl border border-border bg-card p-6 hover:border-primary/30 transition-colors">
+      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-teal text-teal-foreground">
         {icon}
       </div>
-      <h3 className="mt-4 text-lg font-semibold">{title}</h3>
+      <h3 className="mt-4 text-lg font-semibold text-foreground">{title}</h3>
       <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
         {description}
       </p>
@@ -207,7 +207,7 @@ function FeatureCard({
 function TrustItem({ label, sublabel }: { label: string; sublabel: string }) {
   return (
     <div>
-      <div className="text-2xl font-bold text-[hsl(var(--primary))]">{label}</div>
+      <div className="text-2xl font-bold text-primary">{label}</div>
       <div className="text-sm text-muted-foreground">{sublabel}</div>
     </div>
   )

@@ -1,72 +1,48 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-@layer base {
-  :root {
-    /* MEDrecord Brand Colors */
-    --background: 0 0% 100%;
-    --foreground: 217 31% 15%;
-    
-    --card: 0 0% 100%;
-    --card-foreground: 217 31% 15%;
-    
-    /* Deep Trust Blue - Primary */
-    --primary: 212 56% 39%;
-    --primary-foreground: 0 0% 100%;
-    
-    /* Golden Amber - Accent */
-    --accent: 40 80% 56%;
-    --accent-foreground: 217 31% 15%;
-    
-    /* Clear Sky Blue - Secondary */
-    --secondary: 197 67% 63%;
-    --secondary-foreground: 217 31% 15%;
-    
-    /* Vital Teal - Success/Health */
-    --teal: 168 36% 45%;
-    --teal-foreground: 0 0% 100%;
-    
-    /* Neutrals */
-    --muted: 210 40% 98%;
-    --muted-foreground: 210 7% 46%;
-    --border: 214 32% 91%;
-    
-    /* Design tokens */
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 217 31% 15%;
-    --foreground: 210 40% 98%;
-    
-    --card: 217 31% 18%;
-    --card-foreground: 210 40% 98%;
-    
-    --primary: 212 56% 50%;
-    --primary-foreground: 0 0% 100%;
-    
-    --accent: 40 80% 56%;
-    --accent-foreground: 217 31% 15%;
-    
-    --secondary: 197 67% 63%;
-    --secondary-foreground: 217 31% 15%;
-    
-    --teal: 168 36% 50%;
-    --teal-foreground: 0 0% 100%;
-    
-    --muted: 217 31% 22%;
-    --muted-foreground: 215 20% 65%;
-    --border: 217 31% 28%;
-  }
+@theme inline {
+  /* MEDrecord Brand Colors */
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(217 31% 15%);
+  
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(217 31% 15%);
+  
+  /* Deep Trust Blue - Primary */
+  --color-primary: hsl(212 56% 39%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  
+  /* Golden Amber - Accent */
+  --color-accent: hsl(40 80% 56%);
+  --color-accent-foreground: hsl(217 31% 15%);
+  
+  /* Clear Sky Blue - Secondary */
+  --color-secondary: hsl(197 67% 63%);
+  --color-secondary-foreground: hsl(217 31% 15%);
+  
+  /* Vital Teal - Success/Health */
+  --color-teal: hsl(168 36% 45%);
+  --color-teal-foreground: hsl(0 0% 100%);
+  
+  /* Neutrals */
+  --color-muted: hsl(210 40% 98%);
+  --color-muted-foreground: hsl(210 7% 46%);
+  --color-border: hsl(214 32% 91%);
+  
+  /* Typography */
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  
+  /* Design tokens */
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
-@layer base {
-  * {
-    border-color: hsl(var(--border));
-  }
-  body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-  }
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
 }
