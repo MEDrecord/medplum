@@ -7,7 +7,10 @@
     "examples/*"
   ],
   "scripts": {
-    "build": "turbo run build --filter=!@medplum/docs --filter=!./examples/*",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "build:turbo": "turbo run build --filter=!@medplum/docs --filter=!./examples/*",
     "build:all": "turbo run build",
     "build:docs": "turbo run build --filter=@medplum/docs",
     "build:fast": "turbo run build --filter=@medplum/app --filter=@medplum/server",
@@ -83,7 +86,10 @@
   },
   "dependencies": {
     "next": "^16.1.6",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "server-only": "^0.0.1",
+    "tailwindcss": "^4.1.10",
     "zod": "^4.3.6"
   }
 }
