@@ -246,7 +246,7 @@ export default function HomePage() {
                 Gateway-First Architecture
               </h2>
               <p className="mt-4 text-lg text-muted-foreground">
-                All data flows through the HealthTalk Gateway, ensuring secure, 
+                All data flows through the MEDrecord Gateway, ensuring secure, 
                 auditable access to healthcare data with full FHIR compliance.
               </p>
               
@@ -285,7 +285,7 @@ export default function HomePage() {
          │ Secure
          ▼
 ┌─────────────────┐
-│   HealthTalk    │
+│    MEDrecord    │
 │    Gateway      │
 └────────┬────────┘
          │
@@ -354,8 +354,8 @@ export default function HomePage() {
               <Link href="https://medrecord.io" className="text-muted-foreground hover:text-foreground transition-colors">
                 MEDrecord.io
               </Link>
-              <Link href="https://healthtalk.ai" className="text-muted-foreground hover:text-foreground transition-colors">
-                HealthTalk.ai
+              <Link href="https://medsafe.nl" className="text-muted-foreground hover:text-foreground transition-colors">
+                MedSafe.nl
               </Link>
               <Link href="/docs" className="text-muted-foreground hover:text-foreground transition-colors">
                 Documentation

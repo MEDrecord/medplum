@@ -20,12 +20,12 @@ MEDrecord is an intelligent, agent-driven layer around existing healthcare syste
 
 ### 1. Gateway-First (Non-Negotiable)
 
-All data access flows through the HealthTalk Gateway. Direct database access from frontend components is strictly forbidden.
+All data access flows through the MEDrecord Gateway. Direct database access from frontend components is strictly forbidden.
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Next.js GUI   │────▶│  Next.js API    │────▶│ HealthTalk      │
-│   (Browser)     │     │  Routes/Actions │     │ Gateway         │
+│   Next.js GUI   │────▶│  Next.js API    │────▶│   MEDrecord     │
+│   (Browser)     │     │  Routes/Actions │     │   Gateway       │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
                               │                        │
                               │ Server-only            │
@@ -162,12 +162,12 @@ All configuration is externalized. No hardcoded values.
 
 ```bash
 # Required
-HEALTHTALK_GATEWAY_URL=https://auth-test-b2c.healthtalk.ai
-HEALTHTALK_TENANT_ID=<tenant-uuid>
-HEALTHTALK_CLIENT_ID=<client-uuid>
+MEDRECORD_GATEWAY_URL=https://auth-test-b2c.healthtalk.ai
+MEDRECORD_TENANT_ID=<tenant-uuid>
+MEDRECORD_CLIENT_ID=<client-uuid>
 
 # Optional (development only)
-HEALTHTALK_API_KEY=cak_...  # Server-to-server testing
+MEDRECORD_API_KEY=cak_...  # Server-to-server testing
 ```
 
 ### Server-Only Client
@@ -350,7 +350,7 @@ export async function getPatient(id: string) {
 
 ## Integration Points
 
-### HealthTalk Gateway Endpoints
+### MEDrecord Gateway Endpoints
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -379,15 +379,15 @@ Agents can integrate with external services through the Gateway:
 
 ```bash
 # Production
-HEALTHTALK_GATEWAY_URL=https://gateway.healthtalk.ai
-HEALTHTALK_TENANT_ID=${TENANT_ID}
-HEALTHTALK_CLIENT_ID=${CLIENT_ID}
+MEDRECORD_GATEWAY_URL=https://gateway.medrecord.nl
+MEDRECORD_TENANT_ID=${TENANT_ID}
+MEDRECORD_CLIENT_ID=${CLIENT_ID}
 NODE_ENV=production
 
 # Staging
-HEALTHTALK_GATEWAY_URL=https://auth-test-b2c.healthtalk.ai
-HEALTHTALK_TENANT_ID=${TENANT_ID}
-HEALTHTALK_CLIENT_ID=${CLIENT_ID}
+MEDRECORD_GATEWAY_URL=https://auth-test-b2c.healthtalk.ai
+MEDRECORD_TENANT_ID=${TENANT_ID}
+MEDRECORD_CLIENT_ID=${CLIENT_ID}
 NODE_ENV=staging
 ```
 
@@ -406,4 +406,4 @@ The build process must fail if:
 
 - [AGENTS.md](./AGENTS.md) - Agent framework specification
 - [REACT-FLOW-INTEGRATION.md](./REACT-FLOW-INTEGRATION.md) - Workflow visualization
-- [HealthTalk Gateway API](https://auth-test-b2c.healthtalk.ai/docs) - API documentation
+- [MEDrecord Gateway API](https://auth-test-b2c.healthtalk.ai/docs) - API documentation

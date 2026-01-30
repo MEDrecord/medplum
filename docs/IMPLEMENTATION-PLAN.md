@@ -67,13 +67,13 @@ function requireEnv(key: string): string {
 
 export const gatewayConfig = {
   get baseUrl() {
-    return requireEnv('HEALTHTALK_GATEWAY_URL');
+    return requireEnv('MEDRECORD_GATEWAY_URL');
   },
   get tenantId() {
-    return requireEnv('HEALTHTALK_TENANT_ID');
+    return requireEnv('MEDRECORD_TENANT_ID');
   },
   get clientId() {
-    return requireEnv('HEALTHTALK_CLIENT_ID');
+    return requireEnv('MEDRECORD_CLIENT_ID');
   },
   get appUrl() {
     return requireEnv('NEXT_PUBLIC_APP_URL');
@@ -749,9 +749,9 @@ npm run dev
 
 ```bash
 # .env.local
-HEALTHTALK_GATEWAY_URL=https://auth-test-b2c.healthtalk.ai
-HEALTHTALK_TENANT_ID=your-tenant-id
-HEALTHTALK_CLIENT_ID=your-client-id
+MEDRECORD_GATEWAY_URL=https://auth-test-b2c.healthtalk.ai
+MEDRECORD_TENANT_ID=your-tenant-id
+MEDRECORD_CLIENT_ID=your-client-id
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 

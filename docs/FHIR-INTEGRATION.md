@@ -6,7 +6,7 @@
 
 ## Overview
 
-This document describes how the MEDrecord example application integrates with FHIR backend systems. The key principle is that **the GUI does not manage its own FHIR database** - all data access flows through the HealthTalk Gateway.
+This document describes how the MEDrecord example application integrates with FHIR backend systems. The key principle is that **the GUI does not manage its own FHIR database** - all data access flows through the MEDrecord Gateway.
 
 ---
 
@@ -21,7 +21,7 @@ This document describes how the MEDrecord example application integrates with FH
                             │ HTTPS + X-Tenant-ID
                             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     HealthTalk Gateway                               │
+│                     MEDrecord Gateway                                │
 │                                                                      │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                 │
 │  │   Router    │──│  Auth/RBAC  │──│  Aggregator │                 │

@@ -1,9 +1,9 @@
 'use server';
 
 /**
- * Gateway Client - Server-Only FHIR Data Access
+ * MEDrecord Gateway Client - Server-Only FHIR Data Access
  * 
- * This client handles all communication with the HealthTalk Gateway.
+ * This client handles all communication with the MEDrecord Gateway.
  * It MUST only be imported in server components, server actions, or API routes.
  * 
  * @see /docs/ARCHITECTURE.md for gateway-first principles

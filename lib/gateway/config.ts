@@ -1,5 +1,5 @@
 /**
- * Gateway Configuration - Environment-Based Settings
+ * MEDrecord Gateway Configuration - Environment-Based Settings
  * 
  * All configuration values are loaded from environment variables.
  * NO HARDCODED VALUES are allowed in this file.
@@ -39,11 +39,11 @@ function optionalEnv(key: string, defaultValue: string): string {
  */
 export const gatewayConfig = {
   /**
-   * Base URL of the HealthTalk Gateway
+   * Base URL of the MEDrecord Gateway
    * @example https://auth-test-b2c.healthtalk.ai
    */
   get baseUrl(): string {
-    return requireEnv('HEALTHTALK_GATEWAY_URL');
+    return requireEnv('MEDRECORD_GATEWAY_URL');
   },
 
   /**
@@ -51,14 +51,14 @@ export const gatewayConfig = {
    * All requests include X-Tenant-ID header with this value
    */
   get tenantId(): string {
-    return requireEnv('HEALTHTALK_TENANT_ID');
+    return requireEnv('MEDRECORD_TENANT_ID');
   },
 
   /**
    * OAuth Client ID for authentication
    */
   get clientId(): string {
-    return requireEnv('HEALTHTALK_CLIENT_ID');
+    return requireEnv('MEDRECORD_CLIENT_ID');
   },
 
   /**
@@ -73,7 +73,7 @@ export const gatewayConfig = {
    * Only used in development/testing scenarios
    */
   get apiKey(): string | undefined {
-    return process.env.HEALTHTALK_API_KEY;
+    return process.env.MEDRECORD_API_KEY;
   },
 
   /**
@@ -115,9 +115,9 @@ export const gatewayConfig = {
  */
 export function validateGatewayConfig(): void {
   const requiredVars = [
-    'HEALTHTALK_GATEWAY_URL',
-    'HEALTHTALK_TENANT_ID', 
-    'HEALTHTALK_CLIENT_ID',
+    'MEDRECORD_GATEWAY_URL',
+    'MEDRECORD_TENANT_ID', 
+    'MEDRECORD_CLIENT_ID',
     'NEXT_PUBLIC_APP_URL',
   ];
 
