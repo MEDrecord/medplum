@@ -2,7 +2,11 @@
 
 ## 1. Overzicht
 
-Het template systeem ondersteunt twee typen templates:
+Het template systeem ondersteunt AI-gestuurde rapportgeneratie voor klinische sessies. Templates definiëren de structuur en AI prompts voor het genereren van gestructureerde rapporten uit gesprekstranscripties.
+
+### 1.1 Template Types
+
+Het systeem ondersteunt twee typen templates:
 
 | Type | Doel | Tweede Tab |
 |------|------|------------|
@@ -10,6 +14,24 @@ Het template systeem ondersteunt twee typen templates:
 | **Questionnaire** | Data collectie met optionele scoring | Questions (MedPlum `<QuestionnaireBuilder />`) |
 
 Beide typen delen dezelfde shell (naam, categorieën, taal, draft/publish flow, visibility).
+
+### 1.2 Gateway Services
+
+De applicatie communiceert met drie gateway services:
+
+| Environment Variable | Service | Doel |
+|-----|-----|-----|
+| `NEXT_PUBLIC_TEMPLATE_SERVICE_GATEWAY_URL` | Template Service | Templates CRUD, secties, talen, tags, categorieën |
+| `NEXT_PUBLIC_CONSULTATION_SERVICE_GATEWAY_URL` | Consultation Service | Appointments, rapport regeneratie, transcripties |
+| `NEXT_PUBLIC_GATEWAY_BASE_URL` | Auth Gateway | Authenticatie, sessie management |
+
+**Voorbeeld URLs:**
+
+```plaintext
+NEXT_PUBLIC_TEMPLATE_SERVICE_GATEWAY_URL=https://auth-test-b2c.healthtalk.ai
+NEXT_PUBLIC_CONSULTATION_SERVICE_GATEWAY_URL=https://consultation.healthtalk.ai
+NEXT_PUBLIC_GATEWAY_BASE_URL=https://auth-test-b2c.healthtalk.ai
+```
 
 ## 2. Template Data Structuur
 
@@ -232,15 +254,188 @@ function getTranslation(
 }
 ```
 
-## 9. Hooks Overzicht
+## 9. Hooks
 
-| Hook | Functie |
+### 9.1 Hooks Overzicht
+
+| Hook | Locatie | Functie |
+|------|---------|---------|
+| `useTemplatesList` | `hooks/templates/use-templates-list.ts` | Template lijst met paginatie en filters |
+| `useTemplateById` | `hooks/templates/use-template-by-id.ts` | Template detail ophalen |
+| `useTemplateSections` | `hooks/templates/use-template-sections.ts` | Secties beheren |
+| `useLanguages` | `hooks/templates/use-languages.ts` | Beschikbare talen ophalen |
+| `useCreateTemplate` | `hooks/use-create-template.ts` | Template aanmaken |
+| `useUpdateTemplate` | `hooks/templates/use-update-template.ts` | Template updaten |
+| `useRegenerateSummary` | `hooks/use-regenerate-summary.ts` | Rapport generatie met polling |
+| `useAssignConversationTemplate` | `hooks/use-assign-conversation-template.ts` | Template koppelen aan appointment |
+
+### 9.2 useTemplatesList Implementatie
+
+```typescript
+export function useTemplatesList(options?: TemplatesListOptions) {
+  const { language } = useTranslation();
+  
+  const { data, error, isLoading, mutate } = useSWR(
+    ['templates', options, language],
+    async () => {
+      const params = new URLSearchParams({
+        page: String(options?.page || 1),
+        limit: String(options?.limit || 20),
+        language
+      });
+      
+      if (options?.search) params.set('search', options.search);
+      if (options?.visibility) params.set('visibility', options.visibility);
+      if (options?.type) params.set('type', options.type);
+      if (options?.sort_by) params.set('sort_by', options.sort_by);
+      if (options?.sort_order) params.set('sort_order', options.sort_order);
+      
+      const response = await gatewayFetch(
+        `${TEMPLATE_SERVICE_URL}/api/v1/templates?${params}`
+      );
+      
+      if (!response.ok) throw new Error('Failed to fetch templates');
+      return response.json();
+    }
+  );
+  
+  return {
+    templates: data?.data?.data || [],
+    pagination: data?.data?.pagination,
+    isLoading,
+    error,
+    hasMore: data?.data?.pagination?.has_more,
+    loadMore: () => mutate(),
+    refresh: mutate
+  };
+}
+```
+
+### 9.3 useTemplateById Implementatie
+
+```typescript
+export function useTemplateById(id: string | undefined) {
+  const { language } = useTranslation();
+  
+  const { data, error, isLoading } = useSWR(
+    id ? ['template', id, language] : null,
+    async () => {
+      const response = await gatewayFetch(
+        `${TEMPLATE_SERVICE_URL}/api/v1/templates/${id}?language=${language}`
+      );
+      if (!response.ok) throw new Error('Failed to fetch template');
+      return response.json();
+    }
+  );
+  
+  return {
+    template: data?.data as TemplateDetailResponse | undefined,
+    isLoading,
+    error,
+    language
+  };
+}
+```
+
+### 9.4 useRegenerateSummary Implementatie
+
+```typescript
+export function useRegenerateSummary() {
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  
+  const regenerateSummary = useCallback(async (params: {
+    appointmentId: string;
+    language: string;
+    conversationTemplateId: string;
+    additionalPrompt?: string;
+  }) => {
+    setIsRegenerating(true);
+    
+    try {
+      // 1. Start regeneration
+      const startResponse = await gatewayFetch(
+        `${CONSULTATION_SERVICE_URL}/api/callreport/regenerate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params)
+        }
+      );
+      
+      if (!startResponse.ok) throw new Error('Failed to start regeneration');
+      const { regenerationId } = await startResponse.json();
+      
+      // 2. Poll for completion (elke 4s, max 6 min)
+      const maxAttempts = 90;
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise(resolve => setTimeout(resolve, 4000));
+        
+        const statusResponse = await gatewayFetch(
+          `${CONSULTATION_SERVICE_URL}/api/callreport/summary?appointmentId=${params.appointmentId}`
+        );
+        
+        const data = await statusResponse.json();
+        
+        if (data.reportRegenerationStatus === 'COMPLETED') {
+          // 3. Assign template to appointment
+          await gatewayFetch(
+            `${CONSULTATION_SERVICE_URL}/api/appointment/assign-conversation-template`,
+            {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                appointmentId: params.appointmentId,
+                conversationTemplateId: params.conversationTemplateId
+              })
+            }
+          );
+          
+          return data.customSummaries;
+        }
+        
+        if (data.reportRegenerationStatus === 'FAILED') {
+          throw new Error('Report generation failed');
+        }
+      }
+      
+      throw new Error('Timeout waiting for report generation');
+      
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, []);
+  
+  return { regenerateSummary, isRegenerating };
+}
+```
+
+---
+
+## 10. Belangrijke Files
+
+| Bestand | Functie |
+|---------|---------|
+| `hooks/templates/use-templates-list.ts` | Template lijst ophalen met paginatie |
+| `hooks/templates/use-template-by-id.ts` | Template detail ophalen |
+| `hooks/templates/use-template-sections.ts` | Secties beheren |
+| `hooks/templates/use-languages.ts` | Beschikbare talen ophalen |
+| `hooks/use-create-template.ts` | Template aanmaken |
+| `hooks/templates/use-update-template.ts` | Template updaten |
+| `hooks/use-regenerate-summary.ts` | Rapport generatie met polling |
+| `hooks/use-assign-conversation-template.ts` | Template koppelen aan appointment |
+| `lib/api/gateway-fetch.ts` | Centrale fetch wrapper met auth |
+| `lib/i18n/i18n-context.tsx` | Taal context provider |
+| `lib/utils/summary-utils.ts` | Helper voor template timestamp selectie |
+| `lib/types/appointment-summary.ts` | Types voor summaries |
+| `src/features/templates/types.ts` | Template type definities |
+
+---
+
+## 11. Gerelateerde Specs
+
+| Spec | Relatie |
 |------|---------|
-| `useTemplatesList` | Template lijst met paginatie en filters |
-| `useTemplateById` | Template detail ophalen |
-| `useTemplateSections` | Secties beheren |
-| `useLanguages` | Beschikbare talen ophalen |
-| `useCreateTemplate` | Template aanmaken |
-| `useUpdateTemplate` | Template updaten |
-| `useRegenerateSummary` | Rapport generatie met polling |
-| `useAssignConversationTemplate` | Template koppelen aan appointment |
+| [gateway-integration.mdx](./gateway-integration.mdx) | Gateway fetch en auth pattern |
+| [questionnaire-builder.mdx](./questionnaire-builder.mdx) | ROM vragenlijsten (questionnaire template type) |
+| [design-system.mdx](./design-system.mdx) | UI componenten voor template editor |
+| [architecture.mdx](./architecture.mdx) | Overzicht architectuur |
