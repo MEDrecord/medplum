@@ -1,0 +1,111 @@
+# Multi-Brand Architecture
+
+> **Decision:** Eigen branded apps per brand in `mrd/apps/` (Optie C - Sync-Safe)
+
+## Architectuur Overzicht
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     MEDPLUM UPSTREAM                            │
+│                     /packages/*                                 │
+│                     Framework: Mantine                          │
+│                     Status: NOOIT AANRAKEN                      │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ .gitattributes: ours
+                              │ (upstream changes ignored)
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     MRD BRANDS                                  │
+│                     /mrd/apps/*                                 │
+│                     Framework: Tailwind + Next.js               │
+│                     Status: ONZE CODE                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────┐ │
+│  │  MEDrecord  │  │  HealthTalk │  │   Coachi    │  │ MedSafe│ │
+│  │  (Admin)    │  │  (Clinical) │  │  (Patient)  │  │ (Meds) │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └────────┘ │
+│        │                │                │              │       │
+│        └────────────────┴────────────────┴──────────────┘       │
+│                              │                                  │
+│                              ▼                                  │
+│                    ┌─────────────────┐                          │
+│                    │   @mrd/ui       │                          │
+│                    │  globals.css    │                          │
+│                    │  themes/*.css   │                          │
+│                    └─────────────────┘                          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## URL Mapping
+
+| URL | App | Brand | Beschrijving |
+|-----|-----|-------|--------------|
+| `admin.medrecord.nl` | `mrd/apps/medrecord/` | MEDrecord | Platform admin, FHIR browser |
+| `medplum.healthtalk.ai` | `mrd/apps/healthtalk/` | HealthTalk | Clinical reporting, zorgverleners |
+| `app.coachi.nl` | `mrd/apps/coachi/` | Coachi | Patient-facing app |
+| `app.medsafe.nl` | `mrd/apps/medsafe/` | MedSafe | Medicatie veiligheid |
+
+## Design System Scheiding
+
+| Context | Framework | Locatie | Reden |
+|---------|-----------|---------|-------|
+| Medplum upstream | Mantine | `/packages/*` | Zij bepalen dit |
+| Onze brands | Tailwind | `/mrd/*` | v0, Vercel, Next.js native |
+
+### Tailwind Structuur
+
+```
+mrd/packages/ui/
+├── src/
+│   ├── globals.css          # Base Tailwind tokens (neutral)
+│   └── themes/
+│       ├── medrecord.css    # MEDrecord brand kleuren
+│       ├── healthtalk.css   # HealthTalk brand kleuren
+│       ├── coachi.css       # Coachi brand kleuren
+│       └── medsafe.css      # MedSafe brand kleuren
+```
+
+### Per App Imports
+
+```tsx
+// mrd/apps/healthtalk/app/layout.tsx
+import '@mrd/ui/globals.css';
+import '@mrd/ui/themes/healthtalk.css';
+```
+
+## Waarom Optie C (Sync-Safe)
+
+1. **Geen upstream conflicten** - Medplum code blijft onaangeroerd
+2. **Volledige branding controle** - Eigen logo, kleuren, versie per brand
+3. **v0/Vercel native** - Tailwind + Next.js = optimale developer experience
+4. **Flexibel** - Elk brand kan eigen features hebben
+
+## Medplum API Connectie
+
+Alle mrd/ apps verbinden met dezelfde Medplum API server:
+
+```typescript
+// Elke brand app importeert van medrecord
+import { gateway } from '@mrd/medrecord/lib/gateway';
+
+// Gateway URL per environment
+const API_URL = 'https://medplumapivercal.healthtalk.ai';
+```
+
+## Versie Strategie
+
+Elke brand heeft eigen versie, onafhankelijk van Medplum:
+
+```typescript
+// mrd/apps/healthtalk/lib/version.ts
+export const VERSION = {
+  brand: 'HealthTalk',
+  version: '1.0.0',
+  display: 'HealthTalk: 1.0.0'
+};
+```
+
+De Medplum versie wordt NIET getoond aan eindgebruikers.

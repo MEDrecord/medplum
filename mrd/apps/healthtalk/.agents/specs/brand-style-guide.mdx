@@ -1,0 +1,168 @@
+# HealthTalk Brand Style Guide
+
+> AI Based Clinical Reporting
+
+## Brand Identity
+
+### Brand Archetype: The Sage
+
+HealthTalk embodies "The Sage" - a trusted, intelligent guide in mental healthcare.
+Values knowledge, wisdom, and truth. Helps professionals understand complex patient data.
+
+### Brand Voice
+
+Clear, intelligent, and supportive. We speak directly and professionally, offering expert
+guidance and practical insights. Our tone is always trustworthy, empathetic, and focused
+on empowering professionals to work more efficiently and effectively.
+
+### Brand Promise
+
+HealthTalk promises to give mental health professionals back their valuable time by
+providing secure, insightful, and precise AI-powered documentation, allowing them to
+focus more on patient care.
+
+### Brand Personality
+
+Knowledgeable, reliable, and forward-thinking. We are an intelligent guide committed to
+empowering professionals with innovative, secure, and user-friendly technology.
+
+### Tagline
+
+"AI BASED CLINICAL REPORTING"
+
+## Visual Identity
+
+### Logo Assets
+
+| Variant | Usage | Path |
+|---------|-------|------|
+| Icon (square) | App icon, favicon | `/images/healthtalk-icon.png` |
+| Full logo (dark bg) | Headers on dark backgrounds | `/images/healthtalk-logo-dark.png` |
+| Made with (gray) | Footer attribution | `/images/healthtalk-made-with.svg` |
+
+### Color Palette
+
+#### Primary Colors
+
+| Name | Hex | HSL | Usage |
+|------|-----|-----|-------|
+| Serenity Blue | #2D6A8E | 200 51% 37% | Primary brand color, trust |
+| Deep Purple | #3D4DB7 | 233 50% 48% | App icon background, headers |
+
+#### Secondary Colors
+
+| Name | Hex | HSL | Usage |
+|------|-----|-----|-------|
+| Healing Green | #6DAA8A | 152 27% 55% | Success, health indicators |
+| Turquoise Accent | #2DD4BF | 174 83% 50% | Accents, highlights |
+
+#### Neutral Colors
+
+| Name | Hex | HSL | Usage |
+|------|-----|-----|-------|
+| Clarity Grey | #EBF2F6 | 203 33% 94% | Backgrounds, cards |
+| Pure White | #F8F8F8 | 0 0% 97% | Clean backgrounds |
+| Text Dark | #1A1A2E | 240 29% 14% | Primary text |
+
+### Typography
+
+#### Primary Font: Outfit
+
+Modern, clean sans-serif that conveys innovation and precision.
+
+```css
+font-family: 'Outfit', sans-serif;
+```
+
+| Element | Size | Weight |
+|---------|------|--------|
+| H1 | 36-48pt | 700 |
+| H2 | 24-30pt | 600 |
+| H3 | 20-24pt | 600 |
+| Body | 16-18pt | 400 |
+
+#### Secondary Font: Inter
+
+Excellent legibility on screens, ideal for body text.
+
+```css
+font-family: 'Inter', sans-serif;
+```
+
+| Element | Size | Weight |
+|---------|------|--------|
+| Body | 16-18pt | 400 |
+| Small | 14pt | 400 |
+| Caption | 12pt | 500 |
+
+## CSS Design Tokens
+
+```css
+:root {
+  /* HealthTalk Brand Colors */
+  --primary: 200 51% 37%;           /* Serenity Blue #2D6A8E */
+  --primary-foreground: 0 0% 100%;
+  
+  --secondary: 152 27% 55%;         /* Healing Green #6DAA8A */
+  --secondary-foreground: 0 0% 100%;
+  
+  --accent: 174 83% 50%;            /* Turquoise #2DD4BF */
+  --accent-foreground: 240 29% 14%;
+  
+  /* Sidebar (Deep Purple) */
+  --sidebar: 233 50% 48%;           /* #3D4DB7 */
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-primary: 174 83% 50%;   /* Turquoise accent */
+  --sidebar-accent: 233 50% 38%;
+  
+  /* Backgrounds */
+  --background: 0 0% 97%;           /* Pure White */
+  --foreground: 240 29% 14%;        /* Text Dark */
+  --card: 203 33% 94%;              /* Clarity Grey */
+  
+  /* Semantic */
+  --success: 152 27% 55%;           /* Healing Green */
+  --destructive: 0 84% 60%;
+  --warning: 38 92% 50%;
+}
+```
+
+## Brand Application
+
+### Header Component
+
+```tsx
+<header className="bg-sidebar text-sidebar-foreground">
+  <Image src="/images/healthtalk-icon.png" alt="HealthTalk" />
+  <span className="font-outfit font-semibold">HealthTalk</span>
+</header>
+```
+
+### Version Footer
+
+```tsx
+<footer className="text-xs text-muted-foreground">
+  HealthTalk: 1.0.0
+</footer>
+```
+
+### Made With Attribution
+
+```tsx
+<div className="flex items-center gap-2 text-muted-foreground">
+  <span>Made with</span>
+  <Heart className="text-accent" />
+  <span>at HealthTalk</span>
+</div>
+```
+
+## Target Audience
+
+Mental healthcare professionals (psychologists, therapists, psychiatrists) aged 30-60,
+seeking to reduce administrative burden and improve patient care through AI-powered
+documentation tools.
+
+## Competitive Positioning
+
+HealthTalk is the authoritative source for mental health-specific AI insights.
+Not just about efficiency - it's about informed efficiency with deep clinical understanding.
