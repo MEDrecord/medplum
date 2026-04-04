@@ -1,0 +1,246 @@
+# Template Systeem
+
+## 1. Overzicht
+
+Het template systeem ondersteunt twee typen templates:
+
+| Type | Doel | Tweede Tab |
+|------|------|------------|
+| **Note Template** | AI rapport generatie uit transcripties | Sections (AI guidelines + output format) |
+| **Questionnaire** | Data collectie met optionele scoring | Questions (MedPlum `<QuestionnaireBuilder />`) |
+
+Beide typen delen dezelfde shell (naam, categorieën, taal, draft/publish flow, visibility).
+
+## 2. Template Data Structuur
+
+### 2.1 TemplateDetailResponse
+
+```typescript
+interface TemplateDetailResponse {
+  id: string;
+  owner_id: string;
+  owner_type: 'user' | 'organization';
+  created_by: string;
+  status: 'draft' | 'published' | 'archived';
+  visibility: 'private' | 'organization' | 'public';
+  type: 'note-template' | 'questionnaire';  // TYPE DISCRIMINATOR
+  created_at: string;
+  updated_at: string;
+  translations: TemplateTranslationResponse[];
+  categories: TemplateCategoryResponse[];
+  tags: TemplateTagResponse[];
+  sections?: TemplateSectionResponse[];     // Voor note-templates
+  questionnaire?: Questionnaire;             // Voor questionnaires (FHIR)
+  is_favorited: boolean;
+}
+```
+
+### 2.2 Template Vertalingen
+
+```typescript
+interface TemplateTranslationResponse {
+  language_code: string;    // "nl", "en", "de", "es", "tr"
+  title: string;
+  description: string;
+  ai_guidance: string;      // AI prompt voor het hele template
+}
+```
+
+### 2.3 Sectie Structuur (Note Templates)
+
+```typescript
+interface TemplateSectionResponse {
+  id: string;
+  section_id: string;
+  output_format: 'free_text' | 'bullet_points' | 'structured_fields';
+  display_order: number;
+  translations: TemplateSectionTranslation[];
+}
+
+interface TemplateSectionTranslation {
+  language_code: string;
+  name: string;           // Sectie naam (bijv. "Anamnese")
+  ai_guidance: string;    // AI prompt voor deze sectie
+}
+```
+
+## 3. API Endpoints
+
+### 3.1 Template CRUD
+
+| Actie | Method | Endpoint |
+|-------|--------|----------|
+| Lijst ophalen | GET | `/api/v1/templates?page=1&limit=20&type=note-template` |
+| Detail ophalen | GET | `/api/v1/templates/{id}?language=nl` |
+| Aanmaken | POST | `/api/v1/templates` |
+| Updaten | PATCH | `/api/v1/templates/{id}` |
+| Verwijderen | DELETE | `/api/v1/templates/{id}` |
+
+### 3.2 Template Secties
+
+| Actie | Method | Endpoint |
+|-------|--------|----------|
+| Secties ophalen | GET | `/api/v1/templates/{id}/sections?language=nl` |
+| Sectie toevoegen | POST | `/api/v1/templates/{id}/sections` |
+| Sectie verwijderen | DELETE | `/api/v1/templates/{id}/sections/{sectionId}` |
+| Secties herordenen | PUT | `/api/v1/templates/{id}/sections` |
+
+## 4. Rapport Generatie Flow
+
+### 4.1 Regenerate Summary
+
+```typescript
+const { regenerateSummary, isRegenerating } = useRegenerateSummary();
+
+const customSummaries = await regenerateSummary({
+  appointmentId: 'apt-123',
+  language: 'NL',
+  conversationTemplateId: 'template-uuid',
+  additionalPrompt: 'Extra instructie voor AI'
+});
+```
+
+### 4.2 Backend Flow
+
+1. **POST regenerate** - Start async job, krijgt `regenerationId`
+2. **Poll status** - Elke 4s check tot status !== `PROCESSING`
+3. **Fetch summary** - Na `COMPLETED`, haal volledige data op
+4. **Assign template** - Koppel template aan appointment
+
+### 4.3 AI Prompt Constructie
+
+De AI prompt wordt opgebouwd uit:
+
+1. **Template-level `ai_guidance`** - Algemene instructies
+2. **Per-sectie `ai_guidance`** - Specifieke instructies per sectie
+3. **`additionalPrompt`** - User-defined extra instructies
+4. **`language`** - Taal voor output
+
+## 5. Custom Summaries
+
+### 5.1 Storage in Appointment
+
+```typescript
+interface AppointmentSummary {
+  customSummaries: Record<string, Record<string, {
+    title: string;
+    content: string;
+  }>>;  // templateId -> sectionId -> data
+  customSummariesUpdatedAt?: Record<string, number>;
+  reportRegenerationStatus?: 'PROCESSING' | 'COMPLETED' | 'FAILED';
+}
+```
+
+### 5.2 Selectie van Laatste Template
+
+```typescript
+// lib/utils/summary-utils.ts
+function getLatestTemplateId(
+  customSummaries: Record<string, any>,
+  customSummariesUpdatedAt: Record<string, number>
+): string | undefined {
+  return Object.entries(customSummariesUpdatedAt || {})
+    .sort(([, a], [, b]) => b - a)[0]?.[0];
+}
+```
+
+## 6. Create Template Request
+
+```typescript
+interface CreateTemplateRequest {
+  owner_id: string;
+  owner_type: 'user' | 'organization';
+  status: 'draft' | 'published';
+  visibility: 'private' | 'organization' | 'public';
+  type: 'note-template' | 'questionnaire';
+  category_ids: string[];
+  tag_ids: string[];
+  section_ids: SectionIdWithOrder[];      // Bestaande secties
+  sections: NewSection[];                  // Nieuwe secties (inline)
+  translations: TemplateTranslation[];
+  session_duration_seconds: number;
+}
+```
+
+## 7. Combined Report (Multi-Appointment)
+
+### 7.1 Endpoint
+
+```typescript
+// POST /api/combined-report
+{
+  appointmentSummaries: [
+    {
+      appointmentId: 'apt-1',
+      appointmentName: 'Intake',
+      startTime: '2024-01-15T10:00:00Z',
+      sections: [{ title: 'Anamnese', content: '...' }]
+    }
+  ],
+  templateSections: [
+    { id: 'section-1', title: 'Samenvatting' }
+  ],
+  language: 'nl',
+  patientName: 'Jan Jansen'
+}
+```
+
+### 7.2 AI System Prompt
+
+```typescript
+const systemPrompt = `You are an expert clinical report writer...
+1. Analyze all appointment summaries
+2. Organize into sections: ${sectionTitles}
+3. Synthesize chronologically - NOT concatenate
+4. Highlight patterns and progress
+
+${languageInstruction}
+${patientInstruction}
+
+Return JSON: {"sections": [{"id", "title", "content"}]}`;
+```
+
+## 8. Taal Systeem
+
+### 8.1 Ondersteunde Talen
+
+| Code | Naam | Native |
+|------|------|--------|
+| `nl` | Dutch | Nederlands |
+| `en` | English | English |
+| `de` | German | Deutsch |
+| `es` | Spanish | Español |
+| `tr` | Turkish | Türkçe |
+
+### 8.2 Taal Context
+
+```typescript
+const { language, setLanguage, t } = useTranslation();
+// Standaard: "nl"
+// Opgeslagen in localStorage
+```
+
+### 8.3 Template Taal Selectie
+
+```typescript
+function getTranslation(
+  translations: TemplateTranslationResponse[],
+  language: string
+): TemplateTranslationResponse | undefined {
+  return translations.find(t => t.language_code === language) 
+    || translations[0];
+}
+```
+
+## 9. Hooks Overzicht
+
+| Hook | Functie |
+|------|---------|
+| `useTemplatesList` | Template lijst met paginatie en filters |
+| `useTemplateById` | Template detail ophalen |
+| `useTemplateSections` | Secties beheren |
+| `useLanguages` | Beschikbare talen ophalen |
+| `useCreateTemplate` | Template aanmaken |
+| `useUpdateTemplate` | Template updaten |
+| `useRegenerateSummary` | Rapport generatie met polling |
+| `useAssignConversationTemplate` | Template koppelen aan appointment |

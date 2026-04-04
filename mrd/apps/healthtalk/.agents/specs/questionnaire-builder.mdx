@@ -193,7 +193,7 @@ The web form and voice agent always use the patient text. Clinical text is for t
 │ ┌──────────────────────────────────────────────────────────┐ │
 │ │ Have you had little interest or pleasure in things      │ │
 │ │ you normally enjoy over the past two weeks?             │ │
-│ └──────────────────────────────────────────────────────────┘ │
+│ └─���────────────────────────────────────────────────────────┘ │
 │                                                              │
 │ Answer options:                        [NL]  [EN]  [+ Lang]  │
 │  LA6568-5  →  [Not at all         ]  (0)                     │
@@ -231,3 +231,303 @@ The web form and voice agent always use the patient text. Clinical text is for t
 ```
 
 `QuestionnaireResponse` always stores the LOINC code — never patient text. Clinical interoperability is fully preserved.
+
+---
+
+## Gateway API Routes
+
+### Questionnaire Endpoints
+
+| Actie | Method | Endpoint |
+|-------|--------|----------|
+| Lijst ophalen | GET | `/api/questionnaires?type=rom&status=active` |
+| Detail ophalen | GET | `/api/questionnaires/{id}` |
+| Aanmaken | POST | `/api/questionnaires` |
+| Updaten | PUT | `/api/questionnaires/{id}` |
+| Verwijderen | DELETE | `/api/questionnaires/{id}` |
+| Response indienen | POST | `/api/questionnaires/{id}/responses` |
+| LOINC importeren | GET | `/api/builder/loinc/import?code=69737-5` |
+
+### API Route Pattern
+
+```typescript
+// app/api/questionnaires/route.ts
+import { NextResponse } from 'next/server';
+import { verifyGatewayAuth, GatewayAuthError } from '@/lib/gateway';
+import { getMedplumClientFromAuth } from '@/lib/medplum';
+
+export async function GET(request: Request) {
+  try {
+    // 1. Verify auth via Gateway - ALTIJD eerste stap
+    const auth = await verifyGatewayAuth(request);
+    
+    // 2. Get tenant-scoped Medplum client
+    const medplum = getMedplumClientFromAuth(auth);
+    
+    // 3. Parse query params
+    const url = new URL(request.url);
+    const type = url.searchParams.get('type');
+    const status = url.searchParams.get('status') || 'active';
+    
+    // 4. Search questionnaires
+    const bundle = await medplum.search('Questionnaire', {
+      status,
+      _sort: '-_lastUpdated',
+      _count: '100'
+    });
+    
+    return NextResponse.json({
+      data: bundle.entry?.map(e => e.resource) || [],
+      meta: {
+        tenant_id: auth.tenant_id,
+        brand: auth.brand,
+        total: bundle.total || 0
+      }
+    });
+    
+  } catch (error) {
+    if (error instanceof GatewayAuthError) {
+      return NextResponse.json(
+        { error: { code: error.code, message: error.message } },
+        { status: 401 }
+      );
+    }
+    
+    console.error('[HealthTalk] Questionnaires API error:', error);
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const auth = await verifyGatewayAuth(request);
+    const medplum = getMedplumClientFromAuth(auth);
+    const body = await request.json();
+    
+    // Add MEDrecord extensions
+    const questionnaire = {
+      ...body,
+      resourceType: 'Questionnaire',
+      extension: [
+        ...(body.extension || []),
+        {
+          url: 'https://medrecord.nl/fhir/created-by',
+          valueReference: { reference: `Practitioner/${auth.user_id}` }
+        }
+      ]
+    };
+    
+    const created = await medplum.createResource(questionnaire);
+    
+    return NextResponse.json({ data: created }, { status: 201 });
+    
+  } catch (error) {
+    // Error handling...
+  }
+}
+```
+
+---
+
+## MEDrecord FHIR Extensions
+
+### Template Type Extension
+
+```json
+{
+  "url": "https://medrecord.nl/fhir/template-type",
+  "valueCode": "rom"
+}
+```
+
+Values: `rom` | `intake` | `assessment` | `screening`
+
+### Scoring Config Extension
+
+```json
+{
+  "url": "https://medrecord.nl/fhir/scoring-config",
+  "valueString": "{\"ranges\":[{\"min\":0,\"max\":4,\"label\":\"Minimaal\",\"severity\":\"minimal\",\"color\":\"#22c55e\"}]}"
+}
+```
+
+### Created By Extension
+
+```json
+{
+  "url": "https://medrecord.nl/fhir/created-by",
+  "valueReference": {
+    "reference": "Practitioner/uuid"
+  }
+}
+```
+
+---
+
+## Scoring Implementation
+
+### calculatedExpression voor Totaalscore
+
+```json
+{
+  "linkId": "total-score",
+  "text": "Totaalscore",
+  "type": "integer",
+  "readOnly": true,
+  "extension": [{
+    "url": "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-calculatedExpression",
+    "valueExpression": {
+      "language": "text/fhirpath",
+      "expression": "item.where(linkId.startsWith('q')).answer.valueCoding.code.aggregate($this.toInteger() + $total, 0)"
+    }
+  }]
+}
+```
+
+### Score Interpretatie Helper
+
+```typescript
+interface ScoringRange {
+  min: number;
+  max: number;
+  label: string;
+  severity: 'minimal' | 'mild' | 'moderate' | 'severe';
+  color: string;
+}
+
+function interpretScore(
+  score: number,
+  ranges: ScoringRange[]
+): ScoringRange | undefined {
+  return ranges.find(r => score >= r.min && score <= r.max);
+}
+
+// Usage
+const phq9Ranges: ScoringRange[] = [
+  { min: 0, max: 4, label: 'Minimale depressie', severity: 'minimal', color: '#22c55e' },
+  { min: 5, max: 9, label: 'Milde depressie', severity: 'mild', color: '#eab308' },
+  { min: 10, max: 14, label: 'Matige depressie', severity: 'moderate', color: '#f97316' },
+  { min: 15, max: 19, label: 'Matig-ernstige depressie', severity: 'moderate', color: '#ef4444' },
+  { min: 20, max: 27, label: 'Ernstige depressie', severity: 'severe', color: '#dc2626' }
+];
+
+const result = interpretScore(12, phq9Ranges);
+// { min: 10, max: 14, label: 'Matige depressie', severity: 'moderate', color: '#f97316' }
+```
+
+---
+
+## Hooks
+
+### useQuestionnaires
+
+```typescript
+export function useQuestionnaires(options?: {
+  type?: 'rom' | 'intake' | 'assessment';
+  status?: 'draft' | 'active' | 'retired';
+}) {
+  const { data, error, isLoading, mutate } = useSWR(
+    ['questionnaires', options],
+    async () => {
+      const params = new URLSearchParams();
+      if (options?.type) params.set('type', options.type);
+      if (options?.status) params.set('status', options.status);
+      
+      const response = await gatewayFetch(`/api/questionnaires?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch questionnaires');
+      return response.json();
+    }
+  );
+  
+  return {
+    questionnaires: data?.data || [],
+    isLoading,
+    error,
+    refresh: mutate
+  };
+}
+```
+
+### useQuestionnaireById
+
+```typescript
+export function useQuestionnaireById(id: string | undefined) {
+  const { data, error, isLoading } = useSWR(
+    id ? ['questionnaire', id] : null,
+    async () => {
+      const response = await gatewayFetch(`/api/questionnaires/${id}`);
+      if (!response.ok) throw new Error('Failed to fetch questionnaire');
+      return response.json();
+    }
+  );
+  
+  return {
+    questionnaire: data?.data as Questionnaire | undefined,
+    isLoading,
+    error
+  };
+}
+```
+
+---
+
+## Component Wrappers
+
+### QuestionnaireBuilderWrapper
+
+```typescript
+// components/healthtalk/questionnaire-builder-wrapper.tsx
+'use client';
+
+import { QuestionnaireBuilder } from '@medplum/react';
+import type { Questionnaire } from '@medplum/fhirtypes';
+
+interface Props {
+  questionnaire?: Questionnaire;
+  onSave: (questionnaire: Questionnaire) => Promise<void>;
+}
+
+export function QuestionnaireBuilderWrapper({ questionnaire, onSave }: Props) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <QuestionnaireBuilder
+        questionnaire={questionnaire || {
+          resourceType: 'Questionnaire',
+          status: 'draft',
+          item: []
+        }}
+        onSubmit={onSave}
+      />
+    </div>
+  );
+}
+```
+
+### QuestionnaireFormWrapper
+
+```typescript
+// components/healthtalk/questionnaire-form-wrapper.tsx
+'use client';
+
+import { QuestionnaireForm } from '@medplum/react';
+import type { Questionnaire, QuestionnaireResponse } from '@medplum/fhirtypes';
+
+interface Props {
+  questionnaire: Questionnaire;
+  onSubmit: (response: QuestionnaireResponse) => Promise<void>;
+}
+
+export function QuestionnaireFormWrapper({ questionnaire, onSubmit }: Props) {
+  return (
+    <div className="rounded-lg border bg-card p-6">
+      <QuestionnaireForm
+        questionnaire={questionnaire}
+        onSubmit={onSubmit}
+      />
+    </div>
+  );
+}
+```
