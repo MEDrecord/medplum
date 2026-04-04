@@ -1,20 +1,30 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Outfit } from "next/font/google";
 import "@mrd/ui/globals.css";
 import "@mrd/ui/themes/healthtalk.css";
 
-const geistSans = Geist({ subsets: ["latin"] });
-const geistMono = Geist_Mono({ subsets: ["latin"] });
+const outfit = Outfit({ 
+  subsets: ["latin"],
+  variable: "--font-heading",
+  display: "swap",
+});
+
+const inter = Inter({ 
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "HealthTalk",
-  description: "Intelligent healthcare communication platform",
+  title: "HealthTalk - AI Based Clinical Reporting",
+  description: "AI-powered platform that streamlines consultations and automates documentation for mental healthcare professionals.",
+  keywords: ["mental health", "AI", "clinical reporting", "documentation", "healthcare"],
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#F8F8F8" },
+    { media: "(prefers-color-scheme: dark)", color: "#1A1A2E" },
   ],
 };
 
@@ -24,8 +34,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.className} antialiased`}>
+    <html lang="nl" suppressHydrationWarning>
+      <body className={`${outfit.variable} ${inter.variable} font-body antialiased`}>
         {children}
       </body>
     </html>
