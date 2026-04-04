@@ -16,6 +16,8 @@ specs:
   - specs/template-system.mdx        # AI rapport templates
   - specs/questionnaire-builder.mdx  # ROM/Scorelijsten (FHIR Questionnaire)
   - specs/design-system.mdx          # UI components and theming
+  - specs/brand-style-guide.mdx      # HealthTalk visual identity
+  - specs/notification-gateway.mdx   # Notification channels (WhatsApp, SMS, Email, Voice, Teams)
 
 # Compliance - Security and regulatory requirements
 compliance:
