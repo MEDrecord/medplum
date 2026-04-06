@@ -8,7 +8,12 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import packageJson from './package.json' with { type: 'json' };
 
-if (!existsSync(path.join(__dirname, '.env'))) {
+// Only copy .env.defaults in local dev when no .env exists AND no
+// MEDPLUM_BASE_URL is provided via process environment (e.g. Vercel).
+// Without this guard, .env.defaults (localhost:8103) silently overrides
+// the Vercel dashboard env var because Vite .env files take precedence
+// over process.env for import.meta.env.
+if (!existsSync(path.join(__dirname, '.env')) && !process.env.MEDPLUM_BASE_URL) {
   copyFileSync(path.join(__dirname, '.env.defaults'), path.join(__dirname, '.env'));
 }
 

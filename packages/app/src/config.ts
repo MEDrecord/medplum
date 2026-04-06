@@ -20,10 +20,10 @@ const config: MedplumAppConfig = {
   recaptchaSiteKey: import.meta.env?.RECAPTCHA_SITE_KEY,
   registerEnabled: import.meta.env?.MEDPLUM_REGISTER_ENABLED,
   awsTextractEnabled: import.meta.env?.MEDPLUM_AWS_TEXTRACT_ENABLED,
-  // HealthTalk Gateway - defaults enabled with test gateway
-  gatewayUrl: import.meta.env?.HEALTHTALK_GATEWAY_URL || 'https://auth-test-b2c.healthtalk.ai',
-  gatewayTenantId: import.meta.env?.HEALTHTALK_TENANT_ID || 'default',
-  gatewayEnabled: import.meta.env?.HEALTHTALK_GATEWAY_ENABLED ?? true,
+  // HealthTalk Gateway - uses MEDPLUM_ prefix to match Vite envPrefix
+  gatewayUrl: import.meta.env?.MEDPLUM_GATEWAY_URL || 'https://auth-test-b2c.healthtalk.ai',
+  gatewayTenantId: import.meta.env?.MEDPLUM_GATEWAY_TENANT_ID || 'default',
+  gatewayEnabled: import.meta.env?.MEDPLUM_GATEWAY_ENABLED ?? true,
 };
 
 export function getConfig(): MedplumAppConfig {

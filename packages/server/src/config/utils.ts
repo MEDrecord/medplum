@@ -172,6 +172,7 @@ const booleanKeys = new Set([
   'require',
   'rejectUnauthorized',
   'fhirSearchDiscourageSeqScan',
+  'gatewayEnabled',
   'redactAuditEvents',
 ]);
 
