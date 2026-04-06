@@ -11,19 +11,19 @@ section: 7
 > 
 > | Property | Value |
 > |----------|-------|
-> | Domain | `gateway.healthtalk.ai` |
+> | Domain | `notifications.medrecord.nl` (or brand-specific subdomain) |
 > | Repository | Separate (not MedPlum) |
 > | Deployment | Separate Vercel project |
-> | Purpose | Multi-channel message delivery |
+> | Purpose | Multi-channel message delivery for all brands |
 
-The Notification Gateway handles all outbound patient communications and provider integrations.
+The Notification Gateway handles all outbound patient communications and provider integrations for **all brand apps** (HealthTalk, Coachi, MedSafe, MEDrecord).
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      NOTIFICATION GATEWAY                                │
-│                    gateway.healthtalk.ai                                 │
+│                  notifications.medrecord.nl                              │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌─────────────────────────────────────────────────────────────────┐   │

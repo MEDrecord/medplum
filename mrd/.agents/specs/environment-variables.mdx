@@ -7,14 +7,16 @@ section: 22
 
 All secrets are stored in Vercel Environment Variables. Never commit secrets to the repository.
 
-## HealthTalk App (app.healthtalk.ai)
+## Brand Apps (HealthTalk, Coachi, MedSafe, MEDrecord)
+
+Each brand app uses the same environment variables with brand-specific values.
 
 ### MedPlum
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `MEDPLUM_BASE_URL` | MedPlum server URL | `https://medplum.healthtalk.ai` |
-| `MEDPLUM_CLIENT_ID` | OAuth client ID | `healthtalk-app` |
+| `MEDPLUM_BASE_URL` | MedPlum server URL | `https://medplum.medrecord.nl` |
+| `MEDPLUM_CLIENT_ID` | OAuth client ID | `{brand}-app` |
 | `MEDPLUM_CLIENT_SECRET` | OAuth client secret | `secret_...` |
 | `MEDPLUM_PROJECT_ID` | Project identifier | `proj_...` |
 
@@ -30,7 +32,7 @@ All secrets are stored in Vercel Environment Variables. Never commit secrets to 
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `GATEWAY_URL` | Notification gateway URL | `https://gateway.healthtalk.ai` |
+| `GATEWAY_URL` | Notification gateway URL | `https://notifications.medrecord.nl` |
 
 ### Microsoft Teams
 
@@ -40,14 +42,14 @@ All secrets are stored in Vercel Environment Variables. Never commit secrets to 
 
 ---
 
-## Notification Gateway (gateway.healthtalk.ai)
+## Notification Gateway (notifications.medrecord.nl)
 
 ### MedPlum
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `MEDPLUM_BASE_URL` | MedPlum server URL | `https://medplum.healthtalk.ai` |
-| `MEDPLUM_CLIENT_ID` | OAuth client ID | `healthtalk-gateway` |
+| `MEDPLUM_BASE_URL` | MedPlum server URL | `https://medplum.medrecord.nl` |
+| `MEDPLUM_CLIENT_ID` | OAuth client ID | `notifications-gateway` |
 | `MEDPLUM_CLIENT_SECRET` | OAuth client secret | `secret_...` |
 
 ### Twilio
