@@ -58,11 +58,16 @@ The MEDrecord platform is a multi-brand healthcare application ecosystem built o
                     ┌───────────────┼───────────────┐
                     │               │               │
                     ▼               ▼               ▼
-          ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-          │ MedPlum     │  │ Own GPU     │  │ Twilio      │
-          │ FHIR Server │  │ (AI Models) │  │ ElevenLabs  │
-          │             │  │             │  │ Postmark    │
-          └─────────────┘  └─────────────┘  └─────────────┘
+          ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────────┐
+          │ MedPlum     │  │ Own GPU     │  │ Notification Gateway        │
+          │ FHIR Server │  │ (AI Models) │  │ (SEPARATE VERCEL PROJECT)   │
+          │             │  │             │  │                             │
+          │             │  │             │  │ - Twilio (WhatsApp/SMS)     │
+          │             │  │             │  │ - Postmark (Email)          │
+          │             │  │             │  │ - ElevenLabs (Voice)        │
+          │             │  │             │  │                             │
+          │             │  │             │  │ See: notification-gateway.mdx│
+          └─────────────┘  └─────────────┘  └─────────────────────────────┘
 ```
 
 ## Core Principles
@@ -159,3 +164,4 @@ Sensitive operations and credentials exist only in the Gateway:
 | [gateway-service.mdx](./gateway-service.mdx) | Gateway API routes and authentication |
 | [sdk-specification.mdx](./sdk-specification.mdx) | @mrd/sdk API reference |
 | [package-structure.mdx](./package-structure.mdx) | Package dependencies and setup |
+| [notification-gateway.mdx](../apps/healthtalk/.agents/specs/notification-gateway.mdx) | Notification Gateway (separate Vercel project) - Twilio, Postmark, ElevenLabs |
