@@ -8,10 +8,8 @@ import type { IncomingMessage } from 'node:http';
 import { getConfig } from '../config/loader';
 import { AuthenticatedRequestContext, getRequestContext } from '../context';
 import type { Repository } from '../fhir/repo';
-import { getGlobalSystemRepo } from '../fhir/repo';
 import { getLogger } from '../logger';
 import { validateGatewayRequest } from './gateway';
-import type { GatewayHeaders } from './gateway';
 import { getLoginForAccessToken, getLoginForBasicAuth, getLoginForGatewayAuth } from './utils';
 
 export type AuthState = {

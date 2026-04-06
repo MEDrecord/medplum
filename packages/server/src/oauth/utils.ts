@@ -24,6 +24,7 @@ import type {
   ClientApplication,
   IdentityProvider,
   Login,
+  Practitioner,
   Project,
   ProjectMembership,
   Reference,
@@ -1309,8 +1310,17 @@ export async function getLoginForGatewayAuth(
 
   // 3. If no user exists, create one
   if (!user) {
+    const emailPrefix = headers.userEmail.split('@')[0] || 'User';
+    const nameParts = emailPrefix.split(/[._-]/);
+    const firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'User';
+    const lastName = nameParts.length > 1
+      ? nameParts.slice(1).map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
+      : 'User';
+
     user = await globalSystemRepo.createResource<User>({
       resourceType: 'User',
+      firstName,
+      lastName,
       email: headers.userEmail.toLowerCase(),
       externalId: headers.userId,
       project: { reference: `Project/${projectId}` },
@@ -1322,7 +1332,7 @@ export async function getLoginForGatewayAuth(
   let membership = await globalSystemRepo.searchOne<ProjectMembership>({
     resourceType: 'ProjectMembership',
     filters: [
-      { code: 'user', operator: Operator.EQUALS, value: getReferenceString(user) },
+      { code: 'user', operator: Operator.EQUALS, value: `User/${user.id as string}` },
       { code: 'project', operator: Operator.EQUALS, value: `Project/${projectId}` },
     ],
   });
@@ -1341,7 +1351,7 @@ export async function getLoginForGatewayAuth(
       : 'User';
 
     // Create Practitioner profile
-    const practitioner = await projectSystemRepo.createResource({
+    const practitioner = await projectSystemRepo.createResource<Practitioner>({
       resourceType: 'Practitioner',
       name: [{ given: [givenName], family: familyName }],
       telecom: [{ system: 'email', value: headers.userEmail.toLowerCase() }],

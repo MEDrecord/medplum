@@ -3,6 +3,7 @@
 
 import { badRequest, createReference, Operator } from '@medplum/core';
 import type { Practitioner, Project, ProjectMembership, User } from '@medplum/fhirtypes';
+import type { WithId, ProfileResource } from '@medplum/core';
 import type { Request, Response } from 'express';
 import fetch from 'node-fetch';
 import { randomUUID } from 'node:crypto';
@@ -99,6 +100,9 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
     const projectSystemRepo = await getProjectSystemRepo(project);
 
     // --- Step 3: Find or create User ---
+    const firstName = getFirstName(userInfo.name, userInfo.email);
+    const lastName = getLastName(userInfo.name);
+
     let user = await getUserByExternalId(systemRepo, userInfo.id, projectId);
     if (!user) {
       user = await getUserByEmailInProject(userInfo.email.toLowerCase(), projectId);
@@ -106,6 +110,8 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
     if (!user) {
       user = await systemRepo.createResource<User>({
         resourceType: 'User',
+        firstName,
+        lastName,
         email: userInfo.email.toLowerCase(),
         externalId: userInfo.id,
         project: { reference: `Project/${projectId}` },
@@ -114,11 +120,10 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
     }
 
     // --- Step 4: Find or create Practitioner profile ---
-    let practitioner = await findPractitionerByGatewayId(projectSystemRepo, userInfo.id);
+    let practitioner: WithId<Practitioner> | undefined = await findPractitionerByGatewayId(projectSystemRepo, userInfo.id);
     if (!practitioner) {
-      const firstName = getFirstName(userInfo.name, userInfo.email);
-      const lastName = getLastName(userInfo.name);
-      practitioner = await createProfile(projectSystemRepo, project, 'Practitioner', firstName, lastName, userInfo.email);
+      const profile = await createProfile(projectSystemRepo, project, 'Practitioner', firstName, lastName, userInfo.email);
+      practitioner = profile as WithId<Practitioner>;
       // Add Gateway identifier to the Practitioner
       await projectSystemRepo.updateResource<Practitioner>({
         ...practitioner,
@@ -130,6 +135,11 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
       logger.info('Gateway: created Practitioner', { practitionerId: practitioner.id });
     }
 
+    if (!practitioner) {
+      sendOutcome(res, badRequest('Failed to provision Practitioner'));
+      return;
+    }
+
     // --- Step 5: Find or create ProjectMembership ---
     let membership = await systemRepo.searchOne<ProjectMembership>({
       resourceType: 'ProjectMembership',
@@ -139,7 +149,7 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
       ],
     });
     if (!membership) {
-      membership = await createProjectMembership(systemRepo, user, project, practitioner, {
+      membership = await createProjectMembership(systemRepo, user, project, practitioner as WithId<ProfileResource>, {
         externalId: userInfo.id,
       });
       logger.info('Gateway: created ProjectMembership', { membershipId: membership.id });
@@ -252,7 +262,7 @@ async function validateSession(gatewayUrl: string, sessionId: string): Promise<G
 async function findPractitionerByGatewayId(
   repo: SystemRepository,
   gatewayUserId: string
-): Promise<Practitioner | undefined> {
+): Promise<WithId<Practitioner> | undefined> {
   return repo.searchOne<Practitioner>({
     resourceType: 'Practitioner',
     filters: [
