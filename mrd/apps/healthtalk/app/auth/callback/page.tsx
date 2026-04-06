@@ -2,31 +2,72 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { handleAuthCallback } from '@mrd/sdk';
+import { handleAuthCallback, getSessionId, resolveAuthMode } from '@mrd/sdk';
 
 /**
  * Auth Callback Page
  * 
  * Handles the OAuth callback from HealthTalk Gateway.
  * Supports both cookie mode (same-domain) and webToken mode (cross-domain).
+ * 
+ * After successful authentication, automatically provisions a Practitioner
+ * profile in Medplum if one doesn't exist.
  */
 export default function AuthCallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<'authenticating' | 'provisioning' | 'done'>('authenticating');
 
   useEffect(() => {
     async function processCallback() {
       try {
+        // Step 1: Handle Gateway authentication
+        setStatus('authenticating');
         const result = await handleAuthCallback(searchParams);
 
-        if (result.success) {
-          // Successful authentication - redirect to intended destination
-          router.replace(result.redirectUrl);
-        } else {
-          // Authentication failed
+        if (!result.success) {
           setError(result.error ?? 'Authentication failed');
+          return;
         }
+
+        // Step 2: Provision Practitioner profile in Medplum
+        setStatus('provisioning');
+        try {
+          const authMode = resolveAuthMode();
+          const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+          };
+
+          // Add session ID for webToken mode
+          if (authMode === 'webtoken') {
+            const sessionId = getSessionId();
+            if (sessionId) {
+              headers['X-Session-Id'] = sessionId;
+            }
+          }
+
+          const provisionResponse = await fetch('/api/auth/provision', {
+            method: 'POST',
+            headers,
+            credentials: 'include',
+          });
+
+          if (provisionResponse.ok) {
+            const provisionResult = await provisionResponse.json();
+            console.log('[HealthTalk] Practitioner provisioned:', provisionResult);
+          } else {
+            // Log but don't fail - provisioning is best-effort
+            console.warn('[HealthTalk] Practitioner provisioning failed, continuing...');
+          }
+        } catch (provisionError) {
+          // Don't fail the auth flow if provisioning fails
+          console.warn('[HealthTalk] Practitioner provisioning error:', provisionError);
+        }
+
+        // Step 3: Redirect to intended destination
+        setStatus('done');
+        router.replace(result.redirectUrl);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       }
@@ -64,11 +105,17 @@ export default function AuthCallbackPage() {
     );
   }
 
+  const statusMessages = {
+    authenticating: 'Verifying authentication...',
+    provisioning: 'Setting up your profile...',
+    done: 'Redirecting...',
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="space-y-4 text-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
-        <p className="text-muted-foreground">Completing sign in...</p>
+        <p className="text-muted-foreground">{statusMessages[status]}</p>
       </div>
     </div>
   );

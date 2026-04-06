@@ -73,12 +73,12 @@ export async function verifyGatewayAuth(request: Request): Promise<GatewayAuthCo
  * Custom error class for Gateway authentication errors
  */
 export class GatewayAuthError extends Error {
-  constructor(
-    public code: string,
-    message: string
-  ) {
+  code: string;
+
+  constructor(code: string, message: string) {
     super(message);
     this.name = 'GatewayAuthError';
+    this.code = code;
   }
 }
 
