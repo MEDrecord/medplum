@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
+  "framework": "vite",
   "installCommand": "npm install",
-  "buildCommand": "cd mrd/apps/healthtalk && npm run build",
-  "devCommand": "cd mrd/apps/healthtalk && npx next dev --port 3000",
-  "outputDirectory": "mrd/apps/healthtalk/.next"
+  "buildCommand": "cd packages/app && npm run build",
+  "devCommand": "cd packages/app && npm run dev",
+  "outputDirectory": "packages/app/dist"
 }

@@ -22,6 +22,7 @@ import { ChangePasswordPage } from './ChangePasswordPage';
 import { CreateResourcePage } from './CreateResourcePage';
 import { ErrorPage } from './ErrorPage';
 import { FormPage } from './FormPage';
+import { GatewayCallbackPage } from './GatewayCallbackPage';
 import { HomePage } from './HomePage';
 import { AssaysPage } from './lab/AssaysPage';
 import { PanelsPage } from './lab/PanelsPage';
@@ -68,6 +69,7 @@ export function AppRoutes(): JSX.Element {
       <Route errorElement={<ErrorPage />}>
         <Route path="/signin" element={<SignInPage />} />
         <Route path="/oauth" element={<OAuthPage />} />
+        <Route path="/gateway/callback" element={<GatewayCallbackPage />} />
         <Route path="/resetpassword" element={<ResetPasswordPage />} />
         <Route path="/setpassword/:id/:secret" element={<SetPasswordPage />} />
         <Route path="/verifyemail/:id/:secret" element={<VerifyEmailPage />} />

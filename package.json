@@ -9,10 +9,10 @@
     "mrd/apps/*"
   ],
   "scripts": {
-    "build": "cd mrd/apps/healthtalk && npx next build",
-    "dev": "cd mrd/apps/healthtalk && npx next dev --port 3000",
-    "start": "cd mrd/apps/healthtalk && npx next start",
-    "lint": "cd mrd/apps/healthtalk && npx next lint"
+    "build": "cd packages/app && npm run build",
+    "dev": "cd packages/app && npm run dev",
+    "start": "cd packages/app && npm run preview",
+    "lint": "cd packages/app && npm run lint"
   },
   "prettier": {
     "plugins": [
