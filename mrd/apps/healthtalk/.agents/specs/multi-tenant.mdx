@@ -1,0 +1,349 @@
+# Multi-Tenant en Multi-Brand Architectuur
+
+Dit document consolideert alle brand, tenant en styling specificaties.
+
+## 1. Brand Configuratie
+
+### 1.1 Ondersteunde Merken
+
+| Brand ID | Naam | Domein | Doelgroep |
+|----------|------|--------|-----------|
+| `healthtalk` | HealthTalk | healthtalk.ai | GGZ professionals |
+| `coachi` | Coachi | coachi.ai | Coaching en welzijn |
+| `medsafe` | MedSafe | medsafe.ai | Medische veiligheid |
+| `medrecord` | MEDrecord | medrecord.nl | Platform admin |
+
+### 1.2 Brand Type Definition
+
+```typescript
+type BrandId = 'healthtalk' | 'coachi' | 'medsafe' | 'medrecord';
+
+interface BrandConfig {
+  id: BrandId;
+  name: string;
+  tagline: string;
+  domain: string;
+  colors: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    background: string;
+    foreground: string;
+  };
+  fonts: {
+    heading: string;
+    body: string;
+  };
+  logo: {
+    light: string;
+    dark: string;
+  };
+  features: {
+    voiceAgent: boolean;
+    questionnaires: boolean;
+    templates: boolean;
+    combinedReports: boolean;
+  };
+}
+```
+
+### 1.3 Brand Configuratie Bestand
+
+**Locatie:** `mrd/packages/shared/brand-config.ts` (Single Source of Truth)
+
+```typescript
+export const brands: Record<BrandId, BrandConfig> = {
+  healthtalk: {
+    id: 'healthtalk',
+    name: 'HealthTalk',
+    tagline: 'AI-powered mental health conversations',
+    domain: 'healthtalk.ai',
+    colors: {
+      primary: '#0066CC',
+      secondary: '#004C99',
+      accent: '#00A3E0',
+      background: '#FFFFFF',
+      foreground: '#1A1A1A'
+    },
+    fonts: {
+      heading: 'Inter',
+      body: 'Inter'
+    },
+    logo: {
+      light: '/logos/healthtalk-light.svg',
+      dark: '/logos/healthtalk-dark.svg'
+    },
+    features: {
+      voiceAgent: true,
+      questionnaires: true,
+      templates: true,
+      combinedReports: true
+    }
+  },
+  // ... andere brands
+};
+```
+
+## 2. Tenant Architectuur
+
+### 2.1 Tenant Structuur
+
+```plaintext
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         MEDrecord Platform                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐         │
+│  │   HealthTalk    │  │     Coachi      │  │    MedSafe      │         │
+│  │   (Brand)       │  │    (Brand)      │  │    (Brand)      │         │
+│  ├─────────────────┤  ├─────────────────┤  ├─────────────────┤         │
+│  │ Tenant A (Org)  │  │ Tenant D (Org)  │  │ Tenant F (Org)  │         │
+│  │ Tenant B (Org)  │  │ Tenant E (Org)  │  │                 │         │
+│  │ Tenant C (Org)  │  │                 │  │                 │         │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘         │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 Tenant Context
+
+```typescript
+interface TenantContext {
+  tenant_id: string;           // UUID van de organisatie
+  brand: BrandId;              // Brand van de tenant
+  organization_name: string;
+  settings: TenantSettings;
+}
+
+interface TenantSettings {
+  default_language: string;
+  available_languages: string[];
+  features_enabled: string[];
+  custom_branding?: {
+    primary_color?: string;
+    logo_url?: string;
+  };
+}
+```
+
+### 2.3 Tenant Detectie
+
+De tenant wordt bepaald via:
+
+1. **Subdomain**: `tenant-slug.healthtalk.ai`
+2. **Auth token**: `tenant_id` in JWT claims
+3. **Header**: `X-Tenant-Id` voor API calls
+
+```typescript
+function getTenantFromRequest(request: Request): string {
+  // 1. Check header
+  const headerTenant = request.headers.get('X-Tenant-Id');
+  if (headerTenant) return headerTenant;
+  
+  // 2. Check subdomain
+  const host = request.headers.get('host');
+  const subdomain = host?.split('.')[0];
+  if (subdomain && subdomain !== 'www') {
+    return lookupTenantBySlug(subdomain);
+  }
+  
+  // 3. Fallback to auth
+  const auth = await verifyGatewayAuth(request);
+  return auth.tenant_id;
+}
+```
+
+## 3. Brand Styling
+
+### 3.1 CSS Variables
+
+```css
+/* globals.css */
+:root {
+  /* Brand colors - set dynamically per brand */
+  --brand-primary: var(--healthtalk-primary, #0066CC);
+  --brand-secondary: var(--healthtalk-secondary, #004C99);
+  --brand-accent: var(--healthtalk-accent, #00A3E0);
+  
+  /* Semantic tokens */
+  --background: var(--brand-background, #FFFFFF);
+  --foreground: var(--brand-foreground, #1A1A1A);
+  --primary: var(--brand-primary);
+  --primary-foreground: #FFFFFF;
+}
+
+[data-brand="coachi"] {
+  --brand-primary: #10B981;
+  --brand-secondary: #059669;
+  --brand-accent: #34D399;
+}
+
+[data-brand="medsafe"] {
+  --brand-primary: #EF4444;
+  --brand-secondary: #DC2626;
+  --brand-accent: #F87171;
+}
+```
+
+### 3.2 Brand Provider
+
+```typescript
+// components/brand-provider.tsx
+export function BrandProvider({ 
+  brand, 
+  children 
+}: { 
+  brand: BrandId; 
+  children: React.ReactNode 
+}) {
+  const config = brands[brand];
+  
+  return (
+    <div data-brand={brand}>
+      <BrandContext.Provider value={config}>
+        {children}
+      </BrandContext.Provider>
+    </div>
+  );
+}
+
+// Usage
+export function useBrand(): BrandConfig {
+  const context = useContext(BrandContext);
+  if (!context) {
+    throw new Error('useBrand must be used within BrandProvider');
+  }
+  return context;
+}
+```
+
+### 3.3 Logo Component
+
+```typescript
+// components/brand-logo.tsx
+export function BrandLogo({ 
+  variant = 'light',
+  className 
+}: { 
+  variant?: 'light' | 'dark';
+  className?: string;
+}) {
+  const brand = useBrand();
+  const src = variant === 'light' ? brand.logo.light : brand.logo.dark;
+  
+  return (
+    <Image
+      src={src}
+      alt={`${brand.name} logo`}
+      className={className}
+      width={120}
+      height={32}
+    />
+  );
+}
+```
+
+## 4. Feature Flags per Brand
+
+### 4.1 Feature Check
+
+```typescript
+function useFeatureEnabled(feature: keyof BrandConfig['features']): boolean {
+  const brand = useBrand();
+  return brand.features[feature] ?? false;
+}
+
+// Usage
+function TemplatesPage() {
+  const templatesEnabled = useFeatureEnabled('templates');
+  
+  if (!templatesEnabled) {
+    return <FeatureNotAvailable />;
+  }
+  
+  return <TemplatesList />;
+}
+```
+
+### 4.2 Feature Matrix
+
+| Feature | HealthTalk | Coachi | MedSafe |
+|---------|------------|--------|---------|
+| Voice Agent | Yes | Yes | No |
+| Questionnaires (ROM) | Yes | Yes | Yes |
+| Note Templates | Yes | Yes | No |
+| Combined Reports | Yes | No | No |
+| LOINC Import | Yes | No | No |
+
+## 5. Multi-Tenant Data Isolation
+
+### 5.1 Query Scoping
+
+Alle queries worden automatisch gefilterd op `tenant_id`:
+
+```typescript
+// Medplum search with tenant scope
+async function searchResources<T extends Resource>(
+  resourceType: string,
+  params: Record<string, string>
+): Promise<T[]> {
+  const auth = await getAuth();
+  
+  // Tenant scope wordt automatisch toegevoegd door Medplum Project
+  const bundle = await medplum.search(resourceType, {
+    ...params,
+    _project: auth.tenant_id  // Medplum Project = Tenant
+  });
+  
+  return bundle.entry?.map(e => e.resource as T) || [];
+}
+```
+
+### 5.2 Medplum Project Mapping
+
+| Concept | Medplum | HealthTalk |
+|---------|---------|------------|
+| Tenant | Project | Organization |
+| User | Practitioner | User |
+| Patient | Patient | Patient |
+| Brand | - | Extension on Project |
+
+## 6. Deployment
+
+### 6.1 Per-Brand Deployment
+
+```yaml
+# vercel.json
+{
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "/api/brand-router?path=:path*"
+    }
+  ]
+}
+```
+
+### 6.2 Environment Variables per Brand
+
+```bash
+# .env.healthtalk
+NEXT_PUBLIC_BRAND=healthtalk
+NEXT_PUBLIC_GATEWAY_BASE_URL=https://auth.healthtalk.ai
+
+# .env.coachi
+NEXT_PUBLIC_BRAND=coachi
+NEXT_PUBLIC_GATEWAY_BASE_URL=https://auth.coachi.ai
+```
+
+## 7. Imports
+
+De brand configuratie moet worden geimporteerd van de shared package:
+
+```typescript
+// Correct
+import { brands, BrandId, BrandConfig } from '@mrd/shared/brand-config';
+
+// Incorrect - NIET DOEN
+import { BRANDS } from '@/lib/utils';  // Dubbele definitie
+```

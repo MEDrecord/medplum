@@ -805,6 +805,9 @@ export interface QuestionnaireResponseListResponse {
   limit: number;
 }
 
+/** @deprecated Use QuestionnaireResponseDetail instead */
+export type QuestionnaireResponse = QuestionnaireResponseDetail;
+
 export interface ResponseSearchParams {
   patientId?: string;
   from?: string;
@@ -881,4 +884,4 @@ export interface TaskListResponse {
   limit: number;
 }
 
-export interface TaskDetailResponse extends import('@mrd/shared').QuestionnaireTaskDetail {}
+export type TaskDetailResponse = import('@mrd/shared').QuestionnaireTaskDetail;

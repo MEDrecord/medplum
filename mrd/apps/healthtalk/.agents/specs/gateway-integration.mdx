@@ -1,0 +1,253 @@
+# Gateway Integration
+
+## 1. Gateway Fetch Mechanisme
+
+### 1.1 Centrale Fetch Wrapper
+
+**Locatie:** `lib/api/gateway-fetch.ts`
+
+```typescript
+export async function gatewayFetch(
+  url: string, 
+  options: GatewayFetchOptions = {}
+): Promise<Response>
+```
+
+### 1.2 Authenticatie Modes
+
+| Mode | Conditie | Implementatie |
+|------|----------|---------------|
+| **Cookie mode** | Same domain | `credentials: "include"` |
+| **Session-id mode** | Cross-domain | `X-Session-Id` header uit localStorage |
+
+```typescript
+// Cookie mode (same origin)
+if (isSameOrigin) {
+  headers.set('credentials', 'include');
+}
+
+// Session-id mode (cross-origin)
+if (!isSameOrigin && sessionId) {
+  headers.set('X-Session-Id', sessionId);
+}
+```
+
+### 1.3 CSRF Protection
+
+CSRF token alleen voor same-origin mutaties:
+
+```typescript
+if ((isSameOrigin || isRelativeUrl) && method !== 'GET') {
+  headers.set('X-CSRF-Token', csrfToken);
+}
+```
+
+## 2. API Route Pattern
+
+### 2.1 Standaard Route Structuur
+
+```typescript
+// app/api/[resource]/route.ts
+import { NextResponse } from 'next/server';
+import { verifyGatewayAuth, GatewayAuthError } from '@/lib/gateway';
+
+export async function GET(request: Request) {
+  try {
+    // 1. Verify auth via Gateway - ALTIJD eerste stap
+    const auth = await verifyGatewayAuth(request);
+    
+    // 2. Parse query params
+    const url = new URL(request.url);
+    const param = url.searchParams.get('param');
+    
+    // 3. Call downstream service
+    const response = await gatewayFetch(`${SERVICE_URL}/endpoint`, {
+      headers: { Authorization: `Bearer ${auth.accessToken}` }
+    });
+    
+    // 4. Return response
+    return NextResponse.json({
+      data: await response.json(),
+      meta: { tenant_id: auth.tenant_id, brand: auth.brand }
+    });
+    
+  } catch (error) {
+    if (error instanceof GatewayAuthError) {
+      return NextResponse.json(
+        { error: { code: error.code, message: error.message } },
+        { status: 401 }
+      );
+    }
+    
+    console.error('[HealthTalk] API error:', error);
+    return NextResponse.json(
+      { error: { code: 'INTERNAL_ERROR', message: 'Internal server error' } },
+      { status: 500 }
+    );
+  }
+}
+```
+
+## 3. Auth Verificatie
+
+### 3.1 verifyGatewayAuth
+
+```typescript
+interface GatewayAuth {
+  user_id: string;
+  tenant_id: string;
+  brand: BrandId;
+  accessToken: string;
+  roles: string[];
+}
+
+async function verifyGatewayAuth(request: Request): Promise<GatewayAuth> {
+  const response = await fetch(`${GATEWAY_BASE_URL}/auth/verify`, {
+    headers: {
+      Cookie: request.headers.get('Cookie') || '',
+      'X-Session-Id': request.headers.get('X-Session-Id') || ''
+    }
+  });
+  
+  if (!response.ok) {
+    throw new GatewayAuthError('AUTH_REQUIRED', 'Authentication required');
+  }
+  
+  return response.json();
+}
+```
+
+### 3.2 Auth Error Handling
+
+```typescript
+// Client-side global error handler
+useEffect(() => {
+  const handler = (event: CustomEvent) => {
+    if (event.detail.status === 401) {
+      router.push('/login');
+    }
+  };
+  
+  window.addEventListener('gateway:auth-error', handler);
+  return () => window.removeEventListener('gateway:auth-error', handler);
+}, []);
+```
+
+## 4. Response Format
+
+### 4.1 Standaard Success Response
+
+```typescript
+interface GatewaySuccessResponse<T> {
+  data: T;
+  meta?: {
+    tenant_id: string;
+    brand: string;
+    pagination?: {
+      page: number;
+      limit: number;
+      total: number;
+      has_more: boolean;
+    };
+  };
+}
+```
+
+### 4.2 Standaard Error Response
+
+```typescript
+interface GatewayErrorResponse {
+  error: {
+    code: GatewayErrorCode;
+    message: string;
+    details?: Record<string, unknown>;
+    field_errors?: Record<string, string[]>;
+  };
+}
+```
+
+## 5. Service URLs
+
+| Service | Environment Variable | Voorbeeld |
+|---------|---------------------|-----------|
+| Auth Gateway | `NEXT_PUBLIC_GATEWAY_BASE_URL` | `https://auth-test-b2c.healthtalk.ai` |
+| Template Service | `NEXT_PUBLIC_TEMPLATE_SERVICE_GATEWAY_URL` | `https://auth-test-b2c.healthtalk.ai` |
+| Consultation Service | `NEXT_PUBLIC_CONSULTATION_SERVICE_GATEWAY_URL` | `https://consultation.healthtalk.ai` |
+| Medplum FHIR | `MEDPLUM_BASE_URL` | `https://api.medplum.com/fhir/R4` |
+
+## 6. Hooks Pattern
+
+### 6.1 Data Fetching Hook
+
+```typescript
+// hooks/templates/use-templates-list.ts
+export function useTemplatesList(options: TemplatesListOptions) {
+  const { language } = useTranslation();
+  
+  const { data, error, isLoading, mutate } = useSWR(
+    ['templates', options, language],
+    async () => {
+      const params = new URLSearchParams({
+        page: String(options.page || 1),
+        limit: String(options.limit || 20),
+        language
+      });
+      
+      const response = await gatewayFetch(
+        `${TEMPLATE_SERVICE_URL}/api/v1/templates?${params}`
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch templates');
+      }
+      
+      return response.json();
+    }
+  );
+  
+  return {
+    templates: data?.data?.data || [],
+    pagination: data?.data?.pagination,
+    isLoading,
+    error,
+    refresh: mutate
+  };
+}
+```
+
+### 6.2 Mutation Hook
+
+```typescript
+// hooks/use-create-template.ts
+export function useCreateTemplate() {
+  const [isCreating, setIsCreating] = useState(false);
+  
+  const createTemplate = useCallback(async (
+    request: CreateTemplateRequest
+  ): Promise<TemplateDetailResponse> => {
+    setIsCreating(true);
+    
+    try {
+      const response = await gatewayFetch(
+        `${TEMPLATE_SERVICE_URL}/api/v1/templates`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(request)
+        }
+      );
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to create template');
+      }
+      
+      return response.json();
+    } finally {
+      setIsCreating(false);
+    }
+  }, []);
+  
+  return { createTemplate, isCreating };
+}
+```
