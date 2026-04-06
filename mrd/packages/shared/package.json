@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@medplum/fhirtypes": "*"
+    "@medplum/fhirtypes": "file:../../../packages/fhirtypes"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

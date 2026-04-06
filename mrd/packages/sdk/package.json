@@ -10,8 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@medplum/fhirtypes": "*",
-    "@medplum/core": "*",
+    "@medplum/fhirtypes": "file:../../../packages/fhirtypes",
+    "@medplum/core": "file:../../../packages/core",
     "swr": "^2.2.0"
   },
   "peerDependencies": {
