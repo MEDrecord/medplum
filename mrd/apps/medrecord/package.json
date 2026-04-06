@@ -11,6 +11,9 @@
   "dependencies": {
     "@mrd/ui": "0.1.0",
     "@mrd/agents": "0.1.0",
+    "@medplum/core": "^3.2.0",
+    "@medplum/fhirtypes": "^3.2.0",
+    "@upstash/redis": "^1.34.0",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
