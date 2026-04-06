@@ -28,14 +28,21 @@ export interface GatewayClientOptions {
 }
 
 export class GatewayError extends Error {
+  status: number;
+  code: string;
+  details?: unknown;
+
   constructor(
-    public status: number,
-    public code: string,
+    status: number,
+    code: string,
     message: string,
-    public details?: unknown
+    details?: unknown
   ) {
     super(message);
     this.name = 'GatewayError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
   }
 }
 
