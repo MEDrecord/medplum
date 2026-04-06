@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "Shared design system for MEDrecord ecosystem brands",
   "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "exports": {
+    ".": "./src/index.ts",
     "./globals.css": "./src/globals.css",
     "./themes/*": "./src/themes/*",
     "./components/*": "./src/components/*",
@@ -17,7 +20,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mrd/shared": "file:../shared"
+    "@mrd/shared": "file:../shared",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.2.0"
   },
   "peerDependencies": {
     "@medplum/fhirtypes": "^5.0.0",

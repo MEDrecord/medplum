@@ -1,7 +1,17 @@
 // Context & Provider
 export { GatewayProvider, useGateway, type GatewayProviderProps } from './use-gateway';
 
-// Session
+// Auth (new dual-mode authentication)
+export { 
+  AuthProvider, 
+  useAuth, 
+  useAuthOptional,
+  useUser,
+  useIsAuthenticated,
+  type AuthProviderProps,
+} from './use-auth';
+
+// Session (legacy - kept for backward compatibility)
 export { useSession } from './use-session';
 
 // Templates

@@ -9,20 +9,10 @@
     "mrd/apps/*"
   ],
   "scripts": {
-    "build": "turbo run build --filter=!@medplum/docs --filter=!./examples/*",
-    "build:all": "turbo run build",
-    "build:docs": "turbo run build --filter=@medplum/docs",
-    "build:fast": "turbo run build --filter=@medplum/app --filter=@medplum/server",
-    "clean": "turbo run clean",
-    "dev": "npm run dev --workspace=@mrd/medrecord",
-    "dev:medrecord": "npm run dev --workspace=@mrd/medrecord",
-    "dev:healthtalk": "npm run dev --workspace=@mrd/healthtalk",
-    "dev:coachi": "npm run dev --workspace=@mrd/coachi",
-    "lint": "turbo run lint --filter=!@medplum/docs",
-    "lint:fix": "turbo run lint:fix --filter=!@medplum/docs",
-    "prettier": "prettier --write \"**/*.{ts,tsx,cts,mts,js,jsx,cjs,mjs,json}\"",
-    "sort-package-json": "sort-package-json package.json \"packages/*/package.json\" \"examples/*/package.json\" \"mrd/packages/*/package.json\" \"mrd/apps/*/package.json\"",
-    "test": "turbo run test --filter=!@medplum/docs"
+    "build": "cd packages/app && npm run build",
+    "dev": "cd packages/app && npm run dev",
+    "start": "cd packages/app && npm run preview",
+    "lint": "cd packages/app && npm run lint"
   },
   "prettier": {
     "plugins": [
@@ -80,7 +70,6 @@
     "source-map-explorer": "2.5.3",
     "tslib": "2.8.1",
     "tsx": "4.21.0",
-    "turbo": "2.8.20",
     "typescript": "6.0.2",
     "vite": "8.0.3"
   },

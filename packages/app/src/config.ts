@@ -7,6 +7,10 @@ export interface MedplumAppConfig {
   recaptchaSiteKey?: string;
   registerEnabled?: boolean | string;
   awsTextractEnabled?: boolean | string;
+  // HealthTalk Gateway configuration
+  gatewayUrl?: string;
+  gatewayTenantId?: string;
+  gatewayEnabled?: boolean | string;
 }
 
 const config: MedplumAppConfig = {
@@ -16,6 +20,10 @@ const config: MedplumAppConfig = {
   recaptchaSiteKey: import.meta.env?.RECAPTCHA_SITE_KEY,
   registerEnabled: import.meta.env?.MEDPLUM_REGISTER_ENABLED,
   awsTextractEnabled: import.meta.env?.MEDPLUM_AWS_TEXTRACT_ENABLED,
+  // HealthTalk Gateway - defaults enabled with test gateway
+  gatewayUrl: import.meta.env?.HEALTHTALK_GATEWAY_URL || 'https://auth-test-b2c.healthtalk.ai',
+  gatewayTenantId: import.meta.env?.HEALTHTALK_TENANT_ID || 'default',
+  gatewayEnabled: import.meta.env?.HEALTHTALK_GATEWAY_ENABLED ?? true,
 };
 
 export function getConfig(): MedplumAppConfig {
@@ -28,6 +36,16 @@ export function isRegisterEnabled(): boolean {
 
 export function isAwsTextractEnabled(): boolean {
   return isFeatureEnabled('awsTextractEnabled');
+}
+
+export function isGatewayEnabled(): boolean {
+  return isFeatureEnabled('gatewayEnabled');
+}
+
+export function getGatewaySignInUrl(callbackUrl: string): string {
+  const gatewayUrl = config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai';
+  const tenantId = config.gatewayTenantId || 'default';
+  return `${gatewayUrl}/api/auth/signin?tenantId=${tenantId}&callbackUrl=${encodeURIComponent(callbackUrl)}`;
 }
 
 function isFeatureEnabled(feature: keyof MedplumAppConfig): boolean {

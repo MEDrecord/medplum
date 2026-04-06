@@ -20,6 +20,9 @@
  * @see mrd/.agents/specs/sdk-specification.mdx
  */
 
+// Auth (dual-mode authentication)
+export * from './auth';
+
 // Client
 export { GatewayClient, GatewayError } from './client/gateway-client';
 export type {

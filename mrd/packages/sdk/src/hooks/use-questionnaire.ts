@@ -189,10 +189,20 @@ function flattenItems(items: QuestionnaireItem[]): QuestionnaireItem[] {
   return result;
 }
 
+type AnswerValue = Array<{
+  valueBoolean?: boolean;
+  valueInteger?: number;
+  valueDecimal?: number;
+  valueString?: string;
+  valueDate?: string;
+  valueDateTime?: string;
+  valueCoding?: { code: string; display?: string; system?: string };
+}>;
+
 function buildAnswerValue(
   item: QuestionnaireItem,
   value: unknown
-): FHIRQuestionnaireResponse['item'][0]['answer'] {
+): AnswerValue | undefined {
   if (value === undefined || value === null || value === '') {
     return undefined;
   }
