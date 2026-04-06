@@ -5,9 +5,20 @@ section: 7
 
 # Communication Gateway
 
-> **MONOREPO APP**
+> **CURRENT: Integrated in HealthTalk App**
 > 
-> The Communication Gateway is part of the MedPlum monorepo as a separate Next.js app with its own Vercel deployment.
+> For development simplicity, the Communication Gateway is currently integrated into the HealthTalk app.
+> 
+> | Property | Value |
+> |----------|-------|
+> | Location | `mrd/apps/healthtalk/app/api/webhook/` |
+> | Lib files | `mrd/apps/healthtalk/lib/` (twilio.ts, redis.ts, channels.ts, etc.) |
+> | Domain | `app.healthtalk.ai` (same as HealthTalk app) |
+> | Webhook URLs | `https://app.healthtalk.ai/api/webhook/twilio/whatsapp` |
+
+> **FUTURE: Separate Microservice**
+> 
+> When scaling to multiple brands, extract the Communication Gateway into a separate Vercel project:
 > 
 > | Property | Value |
 > |----------|-------|
@@ -15,6 +26,12 @@ section: 7
 > | Domain | `comms.medrecord.nl` (or `comms.healthtalk.ai`) |
 > | Deployment | Separate Vercel project (same repo) |
 > | Purpose | Multi-channel patient communication for all brands |
+> 
+> **Migration steps:**
+> 1. Create new Vercel project with root directory `mrd/apps/communication-gateway`
+> 2. Copy env vars (Twilio, ElevenLabs, Redis, MedPlum)
+> 3. Update Twilio webhook URLs to new domain
+> 4. Update MedPlum subscription endpoint
 
 The Communication Gateway handles all outbound patient communications and provider integrations for **all brand apps** (HealthTalk, Coachi, MedSafe, MEDrecord).
 

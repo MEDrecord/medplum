@@ -30,6 +30,9 @@ This document describes how MedPlum Subscriptions trigger the Communication Gate
 
 Triggers when a new questionnaire task is created.
 
+> **Note:** Currently integrated in HealthTalk app. Use `app.healthtalk.ai` as endpoint.
+> When migrating to separate Communication Gateway, update to `comms.medrecord.nl`.
+
 ```json
 {
   "resourceType": "Subscription",
@@ -39,7 +42,7 @@ Triggers when a new questionnaire task is created.
   "criteria": "Task?status=requested&code=http://loinc.org|74468-0",
   "channel": {
     "type": "rest-hook",
-    "endpoint": "https://comms.medrecord.nl/api/webhooks/task-created",
+    "endpoint": "https://app.healthtalk.ai/api/webhook/medplum",
     "payload": "application/fhir+json",
     "header": [
       "X-Subscription-Secret: ${SUBSCRIPTION_SECRET}"
@@ -61,7 +64,7 @@ Triggers when a task is due for reminder (based on Task.restriction.period).
   "criteria": "Task?status=in-progress&code=http://loinc.org|74468-0",
   "channel": {
     "type": "rest-hook",
-    "endpoint": "https://comms.medrecord.nl/api/webhooks/task-reminder",
+    "endpoint": "https://app.healthtalk.ai/api/webhook/medplum",
     "payload": "application/fhir+json",
     "header": [
       "X-Subscription-Secret: ${SUBSCRIPTION_SECRET}"
@@ -83,7 +86,7 @@ Triggers when patient completes a questionnaire (for score calculation).
   "criteria": "QuestionnaireResponse?status=completed",
   "channel": {
     "type": "rest-hook",
-    "endpoint": "https://comms.medrecord.nl/api/webhooks/response-completed",
+    "endpoint": "https://app.healthtalk.ai/api/webhook/medplum",
     "payload": "application/fhir+json",
     "header": [
       "X-Subscription-Secret: ${SUBSCRIPTION_SECRET}"
