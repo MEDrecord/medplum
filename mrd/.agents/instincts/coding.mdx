@@ -1,0 +1,264 @@
+---
+title: Coding Instincts
+---
+
+# Platform Coding Instincts
+
+Non-negotiable coding rules for all MEDrecord platform code.
+
+## Architecture Rules
+
+### Gateway-First
+
+All data flows through the Gateway. No exceptions.
+
+```
+✓ UI → SDK → Gateway → MedPlum
+✗ UI → MedPlum directly
+✗ UI → Direct database access
+```
+
+### Server-Side Secrets
+
+Sensitive operations exist only in the Gateway:
+
+```typescript
+// ✗ BAD - Never in UI code
+const medplum = new MedplumClient({
+  clientId: process.env.MEDPLUM_CLIENT_ID,
+  clientSecret: process.env.MEDPLUM_CLIENT_SECRET,  // EXPOSED!
+});
+
+// ✓ GOOD - In Gateway only
+// gateway/lib/medplum.ts (server-side)
+const medplum = new MedplumClient({
+  clientId: process.env.MEDPLUM_CLIENT_ID,
+  clientSecret: process.env.MEDPLUM_CLIENT_SECRET,
+});
+```
+
+### Request Verification
+
+Every Gateway request must verify `auth.id`:
+
+```typescript
+// ✓ GOOD
+export async function GET(request: Request) {
+  const auth = await authMiddleware(request);  // REQUIRED
+  // auth.userId, auth.tenantId now available
+}
+
+// ✗ BAD
+export async function GET(request: Request) {
+  // No auth check - NEVER do this
+  const data = await getData();
+}
+```
+
+## UI Rules
+
+### shadcn/ui Only
+
+All UI components use shadcn/ui. No custom component libraries.
+
+```typescript
+// ✓ GOOD
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+
+// ✗ BAD
+import { Button } from '@chakra-ui/react';
+import { Card } from '@material-ui/core';
+```
+
+### No Custom CSS
+
+All styling through Tailwind design tokens:
+
+```typescript
+// ✓ GOOD
+<div className="bg-background text-foreground p-4 rounded-lg border">
+
+// ✗ BAD
+<div style={{ backgroundColor: '#fff', padding: '16px' }}>
+<div className="custom-card">  // No custom CSS classes
+```
+
+### No Inline Styles
+
+```typescript
+// ✓ GOOD
+<Button className="w-full">Submit</Button>
+
+// ✗ BAD
+<Button style={{ width: '100%' }}>Submit</Button>
+```
+
+## Data Fetching Rules
+
+### No useEffect for Data Fetching
+
+Use SWR via SDK hooks:
+
+```typescript
+// ✓ GOOD
+function Templates() {
+  const { data, isLoading } = useTemplatesList();
+}
+
+// ✗ BAD
+function Templates() {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    fetch('/api/templates').then(r => r.json()).then(setData);
+  }, []);
+}
+```
+
+### RSC for Initial Data
+
+Use React Server Components for initial page data:
+
+```typescript
+// ✓ GOOD - Server Component
+async function TemplatesPage() {
+  const client = await getServerClient();
+  const templates = await client.templates.list();
+  return <TemplateList initial={templates} />;
+}
+
+// ✗ BAD - Client-side only loading
+'use client';
+function TemplatesPage() {
+  const { data } = useTemplatesList();  // Shows loading spinner first
+}
+```
+
+## TypeScript Rules
+
+### Strict Types
+
+No `any`, no type assertions unless absolutely necessary:
+
+```typescript
+// ✓ GOOD
+interface Template {
+  id: string;
+  title: string;
+  type: 'note-template' | 'questionnaire';
+}
+
+function processTemplate(template: Template) { }
+
+// ✗ BAD
+function processTemplate(template: any) { }
+function processTemplate(template: Template | any) { }
+```
+
+### Import Types from @mrd/shared
+
+```typescript
+// ✓ GOOD
+import type { Template, BrandId } from '@mrd/shared';
+
+// ✗ BAD - Defining types locally that exist in shared
+interface Template { ... }
+```
+
+## Error Handling Rules
+
+### Never Swallow Errors
+
+```typescript
+// ✓ GOOD
+try {
+  await client.templates.create(data);
+} catch (error) {
+  if (isGatewayError(error)) {
+    toast.error(error.message);
+  } else {
+    console.error('Unexpected error:', error);
+    toast.error('Something went wrong');
+  }
+}
+
+// ✗ BAD
+try {
+  await client.templates.create(data);
+} catch (error) {
+  // Silent failure
+}
+```
+
+### User-Friendly Messages
+
+```typescript
+// ✓ GOOD
+toast.error('Could not save template. Please try again.');
+
+// ✗ BAD
+toast.error(error.message);  // May expose technical details
+toast.error('Error: VALIDATION_ERROR at field title');
+```
+
+## Component Rules
+
+### Split Large Components
+
+Pages should import components, not contain all logic:
+
+```typescript
+// ✓ GOOD
+// app/templates/page.tsx
+import { TemplateList } from '@/components/templates/template-list';
+import { TemplateFilters } from '@/components/templates/template-filters';
+
+export default function TemplatesPage() {
+  return (
+    <div>
+      <TemplateFilters />
+      <TemplateList />
+    </div>
+  );
+}
+
+// ✗ BAD
+// app/templates/page.tsx
+export default function TemplatesPage() {
+  // 500 lines of component code here
+}
+```
+
+### Semantic HTML
+
+```typescript
+// ✓ GOOD
+<main>
+  <header>
+    <h1>Templates</h1>
+  </header>
+  <section aria-label="Template list">
+    {templates.map(t => <article key={t.id}>...</article>)}
+  </section>
+</main>
+
+// ✗ BAD
+<div>
+  <div>
+    <div>Templates</div>
+  </div>
+  <div>
+    {templates.map(t => <div key={t.id}>...</div>)}
+  </div>
+</div>
+```
+
+## When in Doubt
+
+**STOP and ask.** Do not assume requirements or make decisions that affect:
+- Security
+- Data integrity
+- User experience
+- Architecture
+
+Ask the team before proceeding.

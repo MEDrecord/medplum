@@ -1,0 +1,246 @@
+---
+title: Gateway Client Pattern
+---
+
+# Gateway Client Pattern
+
+How to instantiate and use the GatewayClient in brand applications.
+
+## App Setup
+
+### 1. Environment Variables
+
+```env
+# .env.local
+NEXT_PUBLIC_GATEWAY_URL=https://gateway.medrecord.nl
+```
+
+### 2. Root Layout with GatewayProvider
+
+```typescript
+// app/layout.tsx
+import { GatewayProvider } from '@mrd/sdk';
+import { BrandProvider } from '@mrd/ui';
+import { getSession } from '@/lib/auth';
+
+export default async function RootLayout({ 
+  children 
+}: { 
+  children: React.ReactNode 
+}) {
+  const session = await getSession();
+
+  return (
+    <html>
+      <body>
+        <BrandProvider brand="healthtalk">
+          <GatewayProvider
+            gatewayUrl={process.env.NEXT_PUBLIC_GATEWAY_URL!}
+            brand="healthtalk"
+            tenantId={session?.tenantId}
+            userId={session?.userId}
+            getAccessToken={async () => {
+              const res = await fetch('/api/auth/token');
+              const { token } = await res.json();
+              return token;
+            }}
+          >
+            {children}
+          </GatewayProvider>
+        </BrandProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### 3. Token Endpoint
+
+```typescript
+// app/api/auth/token/route.ts
+import { getSession } from '@/lib/auth';
+
+export async function GET() {
+  const session = await getSession();
+  
+  if (!session) {
+    return Response.json({ error: 'Not authenticated' }, { status: 401 });
+  }
+
+  return Response.json({ token: session.accessToken });
+}
+```
+
+## Usage in Components
+
+### Using Hooks (Recommended)
+
+```typescript
+'use client';
+
+import { useTemplatesList, useGateway } from '@mrd/sdk';
+
+export function TemplateList() {
+  // Use pre-built hooks for common operations
+  const { data, isLoading, error } = useTemplatesList({
+    type: 'questionnaire',
+  });
+
+  // Access client for custom operations
+  const { client } = useGateway();
+
+  const handlePublish = async (id: string) => {
+    await client.templates.publish(id);
+  };
+
+  if (isLoading) return <Skeleton />;
+  if (error) return <Error message={error.message} />;
+
+  return (
+    <ul>
+      {data.templates.map(template => (
+        <TemplateCard 
+          key={template.id} 
+          template={template}
+          onPublish={() => handlePublish(template.id)}
+        />
+      ))}
+    </ul>
+  );
+}
+```
+
+### Using Client Directly
+
+For operations not covered by hooks:
+
+```typescript
+'use client';
+
+import { useGateway } from '@mrd/sdk';
+
+export function NotificationButton({ taskId }: { taskId: string }) {
+  const { client } = useGateway();
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    setSending(true);
+    try {
+      await client.notifications.send({
+        taskId,
+        channel: 'auto',
+      });
+      toast.success('Questionnaire sent');
+    } catch (error) {
+      toast.error('Failed to send');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Button onClick={handleSend} disabled={sending}>
+      {sending ? 'Sending...' : 'Send Questionnaire'}
+    </Button>
+  );
+}
+```
+
+## Server Components
+
+For Server Components, create a server-side client:
+
+```typescript
+// lib/gateway-server.ts
+import { GatewayClient } from '@mrd/sdk';
+import { cookies } from 'next/headers';
+
+export async function getServerClient(): Promise<GatewayClient> {
+  const cookieStore = await cookies();
+  const session = cookieStore.get('session')?.value;
+
+  if (!session) {
+    throw new Error('Not authenticated');
+  }
+
+  return new GatewayClient({
+    gatewayUrl: process.env.GATEWAY_URL!, // Server-side, no NEXT_PUBLIC_
+    brand: 'healthtalk',
+    getAccessToken: async () => session,
+  });
+}
+```
+
+```typescript
+// app/templates/page.tsx (Server Component)
+import { getServerClient } from '@/lib/gateway-server';
+
+export default async function TemplatesPage() {
+  const client = await getServerClient();
+  const { templates } = await client.templates.list();
+
+  return (
+    <div>
+      {templates.map(template => (
+        <TemplateCard key={template.id} template={template} />
+      ))}
+    </div>
+  );
+}
+```
+
+## Error Handling Pattern
+
+```typescript
+'use client';
+
+import { useGateway, isGatewayError } from '@mrd/sdk';
+import { useRouter } from 'next/navigation';
+
+export function ProtectedAction() {
+  const { client } = useGateway();
+  const router = useRouter();
+
+  const handleAction = async () => {
+    try {
+      await client.templates.delete('template-123');
+    } catch (error) {
+      if (isGatewayError(error)) {
+        if (error.status === 401) {
+          router.push('/login');
+          return;
+        }
+        if (error.status === 403) {
+          toast.error('You do not have permission');
+          return;
+        }
+        if (error.status === 422) {
+          // Validation errors
+          error.errors.forEach(e => toast.error(e.message));
+          return;
+        }
+      }
+      toast.error('Something went wrong');
+    }
+  };
+}
+```
+
+## Multi-Brand Pattern
+
+The same code works across brands. Only the provider config changes:
+
+```typescript
+// apps/healthtalk/app/layout.tsx
+<GatewayProvider brand="healthtalk" ... />
+
+// apps/coachi/app/layout.tsx
+<GatewayProvider brand="coachi" ... />
+
+// apps/medsafe/app/layout.tsx
+<GatewayProvider brand="medsafe" ... />
+```
+
+The SDK hooks and client work identically. Brand-specific behavior is handled by:
+1. Gateway routing based on `X-Brand` header
+2. BrandProvider for UI theming

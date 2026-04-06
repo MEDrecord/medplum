@@ -1,0 +1,161 @@
+---
+title: Platform Architecture
+section: 1
+---
+
+# MEDrecord Platform Architecture
+
+The MEDrecord platform is a multi-brand healthcare application ecosystem built on top of the Medplum FHIR server. All brands share the same SDK, Gateway, and infrastructure while maintaining distinct user experiences.
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              BRAND APPS (UI Only)                           │
+│                                                                             │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │ HealthTalk  │  │ Coachi      │  │ MedSafe     │  │ MEDrecord   │        │
+│  │ healthtalk/ │  │ coachi/     │  │ medsafe/    │  │ medrecord/  │        │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘        │
+│         │                │                │                │               │
+│         └────────────────┼────────────────┼────────────────┘               │
+│                          │                │                                │
+│                          ▼                ▼                                │
+│  ┌────────────────────────────────────────────────────────────────────┐   │
+│  │                        @mrd/sdk                                    │   │
+│  │                                                                    │   │
+│  │  GatewayClient ─── useGateway ─── useTemplates ─── useAuth        │   │
+│  └────────────────────────────────────┬───────────────────────────────┘   │
+│                                       │                                    │
+└───────────────────────────────────────┼────────────────────────────────────┘
+                                        │ HTTPS
+                                        ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                           GATEWAY SERVICE (EXISTING)                       │
+│                      auth-test-b2c.healthtalk.ai                          │
+│                                                                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐      │
+│  │ /api/auth   │  │ /api/       │  │ /api/       │  │ /api/notify │      │
+│  │             │  │ templates   │  │ questionnaire│  │             │      │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘      │
+│         │                │                │                │              │
+│         └────────────────┼────────────────┼────────────────┘              │
+│                          │                │                               │
+│  ┌───────────────────────┼────────────────┼─────────────────────────┐    │
+│  │ Server-Side Only      │                │                         │    │
+│  │                       ▼                ▼                         │    │
+│  │  ┌─────────────────────────────────────────────────────────┐    │    │
+│  │  │ MedPlum Client (FHIR Operations)                        │    │    │
+│  │  └────────────────────────┬────────────────────────────────┘    │    │
+│  │                           │                                      │    │
+│  │  ┌─────────────────────────────────────────────────────────┐    │    │
+│  │  │ AI Client (Own GPU)                                     │    │    │
+│  │  └─────────────────────────────────────────────────────────┘    │    │
+│  └──────────────────────────────────────────────────────────────────┘    │
+│                                                                           │
+└───────────────────────────────────┬───────────────────────────────────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │               │               │
+                    ▼               ▼               ▼
+          ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+          │ MedPlum     │  │ Own GPU     │  │ Twilio      │
+          │ FHIR Server │  │ (AI Models) │  │ ElevenLabs  │
+          │             │  │             │  │ Postmark    │
+          └─────────────┘  └─────────────┘  └─────────────┘
+```
+
+## Core Principles
+
+### 1. Gateway-First Architecture
+
+All data flows through the Gateway service. Brand apps never communicate directly with MedPlum, the GPU, or external services.
+
+```
+UI Component → @mrd/sdk hook → GatewayClient → Gateway API → Backend Service
+```
+
+### 2. Brand Separation
+
+Each brand is a separate Next.js application with its own:
+- Domain (healthtalk.ai, coachi.ai, medsafe.ai)
+- Visual identity (colors, logo, typography)
+- Feature flags
+- Tenant configuration
+
+All brands share:
+- SDK (`@mrd/sdk`)
+- UI components (`@mrd/ui`)
+- Gateway service
+- MedPlum FHIR backend
+
+### 3. Server-Side Secrets
+
+Sensitive operations and credentials exist only in the Gateway:
+
+| Location | Contains |
+|----------|----------|
+| Brand Apps | No secrets, no direct API access |
+| Gateway | MedPlum credentials, AI API keys, Twilio tokens |
+| MedPlum | FHIR data, user records |
+
+## Package Dependencies
+
+```
+@medplum/fhirtypes ◄─────────────────────────────────────┐
+@medplum/core ◄──────────────────────────────────────────┤
+                                                         │
+┌─────────────┐      ┌─────────────┐      ┌─────────────┐│
+│ @mrd/shared │ ◄─── │ @mrd/sdk    │ ◄─── │ @mrd/ui     ││
+│             │      │             │      │             ││
+│ - Types     │      │ - Client    │      │ - Brand     ││
+│ - Brand cfg │      │ - Hooks     │      │   Provider  ││
+│ - Constants │      │ - Utils     │      │ - Components││
+└─────────────┘      └─────────────┘      └──────┬──────┘│
+                                                 │       │
+                     ┌───────────────────────────┼───────┘
+                     │                           │
+        ┌────────────┼────────────┼────────────┐  │
+        │            │            │            │  │
+        ▼            ▼            ▼            ▼  │
+┌─────────────┐┌─────────────┐┌─────────────┐┌─────────────┐
+│ healthtalk/ ││ coachi/     ││ medsafe/    ││ medrecord/  │ ◄─┘
+└─────────────┘└─────────────┘└─────────────┘└─────────────┘
+```
+
+## Request Flow Example
+
+### Template Creation
+
+```
+1. Clinician clicks "Create Template" in HealthTalk UI
+
+2. UI Component:
+   const { client } = useGateway();
+   await client.templates.create({ title, type: 'note-template' });
+
+3. GatewayClient:
+   POST https://auth-test-b2c.healthtalk.ai/api/gateway/proxy/templates/
+   Headers: Cookie (session), X-Brand: healthtalk
+   (credentials: 'include' - no API key needed)
+
+4. Gateway:
+   - Validates session cookie (from Redis)
+   - Signs request with HMAC (X-Gateway-Signature)
+   - Forwards to backend service with user context
+   - Backend validates signature, processes request
+
+5. MedPlum:
+   - Creates PlanDefinition resource
+   - Returns FHIR resource
+
+6. Response flows back through Gateway → SDK → UI
+```
+
+## Related Specifications
+
+| Document | Description |
+|----------|-------------|
+| [gateway-service.mdx](./gateway-service.mdx) | Gateway API routes and authentication |
+| [sdk-specification.mdx](./sdk-specification.mdx) | @mrd/sdk API reference |
+| [package-structure.mdx](./package-structure.mdx) | Package dependencies and setup |

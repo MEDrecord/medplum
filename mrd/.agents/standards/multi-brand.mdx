@@ -1,0 +1,337 @@
+---
+title: Multi-Brand Standard
+---
+
+# Multi-Brand Configuration Standard
+
+Standards for configuring and managing multiple brands in the MEDrecord platform.
+
+## Brand Identifiers
+
+| Brand | ID | Domain | Description |
+|-------|-----|--------|-------------|
+| HealthTalk | `healthtalk` | healthtalk.ai | Patient-clinician communication |
+| Coachi | `coachi` | coachi.ai | Coaching and wellness |
+| MedSafe | `medsafe` | medsafe.ai | Medication safety |
+| MEDrecord | `medrecord` | medrecord.nl | Platform administration |
+
+## Brand Configuration Type
+
+```typescript
+// @mrd/shared/src/brands/config.ts
+export type BrandId = 'healthtalk' | 'coachi' | 'medsafe' | 'medrecord';
+
+export interface BrandConfig {
+  id: BrandId;
+  name: string;
+  domain: string;
+  
+  // Visual identity
+  colors: {
+    primary: string;
+    primaryForeground: string;
+    secondary: string;
+    secondaryForeground: string;
+    accent: string;
+    accentForeground: string;
+    background: string;
+    foreground: string;
+    muted: string;
+    mutedForeground: string;
+    border: string;
+  };
+  
+  logo: {
+    light: string;  // Path to light mode logo
+    dark: string;   // Path to dark mode logo
+    icon: string;   // Square icon for favicon
+  };
+  
+  // Features
+  features: {
+    questionnaires: boolean;
+    voiceAgent: boolean;
+    templates: boolean;
+    combinedReports: boolean;
+    loincImport: boolean;
+  };
+  
+  // Localization
+  defaultLocale: string;
+  supportedLocales: string[];
+  
+  // Contact
+  supportEmail: string;
+  supportPhone?: string;
+}
+```
+
+## Brand Configuration Files
+
+```typescript
+// @mrd/shared/src/brands/healthtalk.ts
+import type { BrandConfig } from './config';
+
+export const healthtalkConfig: BrandConfig = {
+  id: 'healthtalk',
+  name: 'HealthTalk',
+  domain: 'healthtalk.ai',
+  
+  colors: {
+    primary: '#0F766E',           // Teal 700
+    primaryForeground: '#FFFFFF',
+    secondary: '#F0FDFA',         // Teal 50
+    secondaryForeground: '#0F766E',
+    accent: '#14B8A6',            // Teal 500
+    accentForeground: '#FFFFFF',
+    background: '#FFFFFF',
+    foreground: '#0F172A',
+    muted: '#F1F5F9',
+    mutedForeground: '#64748B',
+    border: '#E2E8F0',
+  },
+  
+  logo: {
+    light: '/brands/healthtalk/logo-light.svg',
+    dark: '/brands/healthtalk/logo-dark.svg',
+    icon: '/brands/healthtalk/icon.svg',
+  },
+  
+  features: {
+    questionnaires: true,
+    voiceAgent: true,
+    templates: true,
+    combinedReports: true,
+    loincImport: true,
+  },
+  
+  defaultLocale: 'nl-NL',
+  supportedLocales: ['nl-NL', 'en-US'],
+  
+  supportEmail: 'support@healthtalk.ai',
+};
+```
+
+```typescript
+// @mrd/shared/src/brands/coachi.ts
+import type { BrandConfig } from './config';
+
+export const coacchiConfig: BrandConfig = {
+  id: 'coachi',
+  name: 'Coachi',
+  domain: 'coachi.ai',
+  
+  colors: {
+    primary: '#7C3AED',           // Violet 600
+    primaryForeground: '#FFFFFF',
+    secondary: '#F5F3FF',         // Violet 50
+    secondaryForeground: '#7C3AED',
+    accent: '#A78BFA',            // Violet 400
+    accentForeground: '#FFFFFF',
+    background: '#FFFFFF',
+    foreground: '#0F172A',
+    muted: '#F1F5F9',
+    mutedForeground: '#64748B',
+    border: '#E2E8F0',
+  },
+  
+  logo: {
+    light: '/brands/coachi/logo-light.svg',
+    dark: '/brands/coachi/logo-dark.svg',
+    icon: '/brands/coachi/icon.svg',
+  },
+  
+  features: {
+    questionnaires: true,
+    voiceAgent: false,
+    templates: true,
+    combinedReports: false,
+    loincImport: false,
+  },
+  
+  defaultLocale: 'nl-NL',
+  supportedLocales: ['nl-NL', 'en-US'],
+  
+  supportEmail: 'support@coachi.ai',
+};
+```
+
+## Using Brand Configuration
+
+### In UI Components
+
+```typescript
+// @mrd/ui/src/brand/brand-provider.tsx
+'use client';
+
+import { createContext, useContext } from 'react';
+import type { BrandConfig, BrandId } from '@mrd/shared';
+import { getBrandConfig } from '@mrd/shared';
+
+const BrandContext = createContext<BrandConfig | null>(null);
+
+export function BrandProvider({ 
+  brand, 
+  children 
+}: { 
+  brand: BrandId;
+  children: React.ReactNode;
+}) {
+  const config = getBrandConfig(brand);
+
+  return (
+    <BrandContext.Provider value={config}>
+      <style>{`
+        :root {
+          --primary: ${config.colors.primary};
+          --primary-foreground: ${config.colors.primaryForeground};
+          --secondary: ${config.colors.secondary};
+          --secondary-foreground: ${config.colors.secondaryForeground};
+          --accent: ${config.colors.accent};
+          --accent-foreground: ${config.colors.accentForeground};
+          --background: ${config.colors.background};
+          --foreground: ${config.colors.foreground};
+          --muted: ${config.colors.muted};
+          --muted-foreground: ${config.colors.mutedForeground};
+          --border: ${config.colors.border};
+        }
+      `}</style>
+      {children}
+    </BrandContext.Provider>
+  );
+}
+
+export function useBrand(): BrandConfig {
+  const context = useContext(BrandContext);
+  if (!context) {
+    throw new Error('useBrand must be used within BrandProvider');
+  }
+  return context;
+}
+```
+
+### Feature Flags
+
+```typescript
+import { useBrand } from '@mrd/ui';
+
+function Navigation() {
+  const brand = useBrand();
+
+  return (
+    <nav>
+      <Link href="/gesprekken">Consultations</Link>
+      {brand.features.templates && (
+        <Link href="/sjablonen">Templates</Link>
+      )}
+      {brand.features.questionnaires && (
+        <Link href="/vragenlijsten">Questionnaires</Link>
+      )}
+    </nav>
+  );
+}
+```
+
+### Brand Logo
+
+```typescript
+import { useBrand } from '@mrd/ui';
+import Image from 'next/image';
+
+function BrandLogo({ variant = 'light' }: { variant?: 'light' | 'dark' }) {
+  const brand = useBrand();
+  const src = variant === 'dark' ? brand.logo.dark : brand.logo.light;
+
+  return (
+    <Image
+      src={src}
+      alt={brand.name}
+      width={120}
+      height={32}
+    />
+  );
+}
+```
+
+## Gateway Brand Handling
+
+The Gateway validates and uses the `X-Brand` header:
+
+```typescript
+// gateway/lib/middleware/brand-middleware.ts
+import { getBrandConfig, type BrandId } from '@mrd/shared';
+
+const VALID_BRANDS: BrandId[] = ['healthtalk', 'coachi', 'medsafe', 'medrecord'];
+
+export function brandMiddleware(request: Request): BrandConfig {
+  const brandHeader = request.headers.get('X-Brand');
+  
+  if (!brandHeader || !VALID_BRANDS.includes(brandHeader as BrandId)) {
+    throw new Error('Invalid or missing X-Brand header');
+  }
+  
+  return getBrandConfig(brandHeader as BrandId);
+}
+```
+
+## App-Specific Configuration
+
+Each app sets its brand once in the root layout:
+
+```typescript
+// apps/healthtalk/app/layout.tsx
+import { BrandProvider } from '@mrd/ui';
+import { GatewayProvider } from '@mrd/sdk';
+
+export default function RootLayout({ children }) {
+  return (
+    <BrandProvider brand="healthtalk">
+      <GatewayProvider brand="healthtalk" ...>
+        {children}
+      </GatewayProvider>
+    </BrandProvider>
+  );
+}
+```
+
+## Adding a New Brand
+
+1. **Add brand ID to type:**
+   ```typescript
+   // @mrd/shared/src/brands/config.ts
+   export type BrandId = 'healthtalk' | 'coachi' | 'medsafe' | 'medrecord' | 'newbrand';
+   ```
+
+2. **Create configuration file:**
+   ```typescript
+   // @mrd/shared/src/brands/newbrand.ts
+   export const newbrandConfig: BrandConfig = { ... };
+   ```
+
+3. **Register in index:**
+   ```typescript
+   // @mrd/shared/src/brands/index.ts
+   import { newbrandConfig } from './newbrand';
+   
+   const brands: Record<BrandId, BrandConfig> = {
+     healthtalk: healthtalkConfig,
+     coachi: coacchiConfig,
+     medsafe: medsafeConfig,
+     medrecord: medrecordConfig,
+     newbrand: newbrandConfig,
+   };
+   ```
+
+4. **Create app:**
+   ```bash
+   cp -r mrd/apps/healthtalk mrd/apps/newbrand
+   # Update layout.tsx with brand="newbrand"
+   ```
+
+5. **Add assets:**
+   ```
+   public/brands/newbrand/
+   ├── logo-light.svg
+   ├── logo-dark.svg
+   └── icon.svg
+   ```

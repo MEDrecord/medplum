@@ -1,0 +1,550 @@
+---
+title: Gateway Service
+section: 2
+---
+
+# Gateway Service Specification
+
+The Gateway is the **existing** central API service at `auth-test-b2c.healthtalk.ai`. All brand apps communicate with backend services through this Gateway. It handles authentication via Azure AD B2C, session management, and proxies requests to backend services with HMAC signatures.
+
+> **Important**: The Gateway already exists and is operational. This document describes how to integrate with it, not how to build it.
+
+## Service Overview
+
+| Property | Value |
+|----------|-------|
+| Base URL | `https://auth-test-b2c.healthtalk.ai` |
+| Auth Provider | Azure AD B2C (OAuth2/OIDC with PKCE) |
+| Session Storage | Redis |
+| Status | Production-ready |
+
+## Architecture Overview
+
+```
+┌──────────────┐     ┌─────────────────────────────────┐     ┌──────────────┐
+│   Frontend   │     │          API Gateway            │     │   Backend    │
+│   (Browser)  │     │  auth-test-b2c.healthtalk.ai   │     │   Service    │
+└──────┬───────┘     └────────────┬────────────────────┘     └──────┬───────┘
+       │                          │                                  │
+       │  1. Sign In              │                                  │
+       ├─────────────────────────>│                                  │
+       │     (Azure B2C)          │                                  │
+       │                          │                                  │
+       │  2. Session Cookie       │                                  │
+       │<─────────────────────────┤                                  │
+       │     (HttpOnly)           │                                  │
+       │                          │                                  │
+       │  3. API Call             │  4. Validate Session             │
+       │     (Cookie only)        │     Get user from Redis          │
+       ├─────────────────────────>│                                  │
+       │  NO API KEY!             │  5. Sign Request (HMAC)          │
+       │                          ├─────────────────────────────────>│
+       │                          │  X-Gateway-Key: gwk_xxx          │
+       │                          │  X-Gateway-Signature: ...        │
+       │                          │  X-User-Id: user123              │
+       │                          │                                  │
+       │                          │  6. Verify Signature      <──────┤
+       │                          │     Process Request              │
+       │                          │                                  │
+       │  7. Response             │  8. Verify Response              │
+       │<─────────────────────────┤<─────────────────────────────────┤
+       │                          │                                  │
+```
+
+## Key System
+
+Four key types are used in the Gateway system:
+
+| Prefix | Name | Purpose | Transmitted |
+|--------|------|---------|-------------|
+| `gwk_` | Gateway Key | Identifies the Gateway to Backend | Yes, in `X-Gateway-Key` header |
+| `ssk_` | Service Secret Key | HMAC signing of requests/responses | **NEVER** (only signatures) |
+| `sak_` | Service API Key | Management and admin operations | Yes, in `X-Api-Key` header |
+| `cak_` | Client API Key | Machine-to-machine authentication | Yes, in `X-Api-Key` header |
+
+> **Frontend apps: NO API KEY needed!** Frontend applications use the session cookie from Azure B2C sign-in.
+
+## Authentication Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/auth/signin` | GET | Redirect to Azure B2C sign-in/sign-up |
+| `/api/auth/signout` | GET | Sign out and clear session |
+| `/api/auth/session` | GET | Get current session (user info) |
+| `/api/auth/forgot-password` | GET | Redirect to password reset flow |
+
+## Gateway Proxy Endpoint
+
+All backend service calls go through:
+
+```
+GET/POST/PUT/PATCH/DELETE /api/gateway/proxy/{service-slug}/{path}
+```
+
+The Gateway:
+1. Validates the session cookie (or Client API Key for M2M)
+2. Signs the request with HMAC using the Service Secret Key
+3. Forwards to the backend service
+4. Verifies the response signature
+5. Returns to the client
+
+---
+
+# Frontend Integration
+
+## Same-Origin Frontend
+
+For frontends hosted on the Gateway domain:
+
+```typescript
+// Call Protected API - NO API KEY NEEDED!
+// Session cookie is automatically included
+
+async function fetchUsers() {
+  const response = await fetch('/api/gateway/proxy/my-service/users', {
+    credentials: 'include', // Send session cookie
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      // Not authenticated - redirect to sign-in
+      window.location.href = '/api/auth/signin?callbackUrl=' + 
+        encodeURIComponent(window.location.href);
+      return;
+    }
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// POST Example
+async function createUser(userData: unknown) {
+  const response = await fetch('/api/gateway/proxy/my-service/users', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(userData)
+  });
+
+  return response.json();
+}
+```
+
+## Cross-Origin Frontend (External Apps)
+
+For frontends hosted on different domains (e.g., `mrd/apps/healthtalk/`):
+
+```typescript
+// External Frontend at https://healthtalk.ai
+// Gateway at https://auth-test-b2c.healthtalk.ai
+
+const GATEWAY_URL = 'https://auth-test-b2c.healthtalk.ai';
+
+// Sign In - redirects user to Gateway → Azure B2C
+function signIn(callbackUrl = window.location.href) {
+  window.location.href = 
+    `${GATEWAY_URL}/api/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+}
+
+// Sign Out
+function signOut(callbackUrl = window.location.origin) {
+  window.location.href = 
+    `${GATEWAY_URL}/api/auth/signout?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+}
+
+// Password Reset
+function resetPassword(callbackUrl = '/') {
+  window.location.href = 
+    `${GATEWAY_URL}/api/auth/forgot-password?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+}
+
+// Check Session
+async function getSession() {
+  const res = await fetch(`${GATEWAY_URL}/api/auth/session`, {
+    credentials: 'include', // Send cookie cross-origin
+  });
+  return res.json(); // Returns { user: {...} } or { user: null }
+}
+
+// Protect a page
+async function requireAuth() {
+  const { user } = await getSession();
+  if (!user) {
+    signIn(window.location.href);
+    return null;
+  }
+  return user;
+}
+
+// Call Protected API
+async function callApi(serviceSlug: string, endpoint: string, options: RequestInit = {}) {
+  const res = await fetch(
+    `${GATEWAY_URL}/api/gateway/proxy/${serviceSlug}${endpoint}`,
+    {
+      ...options,
+      credentials: 'include', // Session cookie
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    }
+  );
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      signIn(window.location.href);
+      return;
+    }
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// Usage
+async function loadUsers() {
+  try {
+    const data = await callApi('my-service', '/users');
+    console.log('Users:', data.users);
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+```
+
+---
+
+# Machine-to-Machine Integration
+
+For server-to-server communication (no user session):
+
+## When to Use M2M
+
+- Backend services calling the API (no user session)
+- Scheduled jobs or cron tasks
+- Partner integrations
+- External system integrations
+- Webhooks and callbacks
+
+## Node.js Example
+
+```typescript
+// Server-to-server API call with Client API Key
+
+const GATEWAY_URL = 'https://auth-test-b2c.healthtalk.ai';
+const CLIENT_API_KEY = process.env.CLIENT_API_KEY; // cak_xxx
+
+async function callGatewayApi(
+  serviceSlug: string, 
+  endpoint: string, 
+  options: RequestInit = {}
+) {
+  const url = `${GATEWAY_URL}/api/gateway/proxy/${serviceSlug}${endpoint}`;
+  
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Api-Key': CLIENT_API_KEY, // Required for M2M
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Usage examples
+async function examples() {
+  // GET request
+  const users = await callGatewayApi('my-service', '/users');
+  
+  // POST request
+  const newUser = await callGatewayApi('my-service', '/users', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: 'John Doe',
+      email: 'john@example.com',
+    }),
+  });
+  
+  // PUT request
+  const updated = await callGatewayApi('my-service', '/users/123', {
+    method: 'PUT',
+    body: JSON.stringify({
+      name: 'Jane Doe',
+    }),
+  });
+}
+```
+
+## Python Example
+
+```python
+import requests
+import os
+
+GATEWAY_URL = 'https://auth-test-b2c.healthtalk.ai'
+CLIENT_API_KEY = os.environ.get('CLIENT_API_KEY')  # cak_xxx
+
+def call_gateway_api(service_slug, endpoint, method='GET', data=None):
+    url = f"{GATEWAY_URL}/api/gateway/proxy/{service_slug}{endpoint}"
+    
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Api-Key': CLIENT_API_KEY,  # Required for M2M
+    }
+    
+    response = requests.request(
+        method=method,
+        url=url,
+        headers=headers,
+        json=data
+    )
+    
+    response.raise_for_status()
+    return response.json()
+
+# Usage
+users = call_gateway_api('my-service', '/users')
+new_user = call_gateway_api(
+    'my-service',
+    '/users',
+    method='POST',
+    data={'name': 'John Doe', 'email': 'john@example.com'}
+)
+```
+
+---
+
+# Backend Service Integration
+
+Backend services must validate Gateway requests and sign responses.
+
+## Environment Setup
+
+```bash
+# .env file
+GATEWAY_API_KEY=gwk_xxx     # From service registration
+SERVICE_SECRET_KEY=ssk_xxx  # From service registration
+PORT=3001
+```
+
+## Express Middleware (Node.js)
+
+```typescript
+import crypto from 'crypto';
+import express, { Request, Response, NextFunction } from 'express';
+
+const app = express();
+app.use(express.json());
+
+const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY;
+const SERVICE_SECRET_KEY = process.env.SERVICE_SECRET_KEY;
+
+// HMAC signature creation
+function createSignature(secretKey: string, payload: string): string {
+  return crypto.createHmac('sha256', secretKey).update(payload).digest('hex');
+}
+
+// Timing-safe comparison
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+// Extend Request type
+interface GatewayRequest extends Request {
+  userId?: string;
+  userEmail?: string;
+  authMethod?: string;
+  gatewayRequestId?: string;
+}
+
+// Validate gateway requests
+function validateGatewayRequest(
+  req: GatewayRequest, 
+  res: Response, 
+  next: NextFunction
+) {
+  // 1. Validate Gateway Key
+  const gatewayKey = req.headers['x-gateway-key'] as string;
+  if (gatewayKey !== GATEWAY_API_KEY) {
+    return res.status(401).json({ error: 'Invalid gateway key' });
+  }
+
+  // 2. Check timestamp (prevent replay attacks)
+  const timestamp = parseInt(req.headers['x-gateway-timestamp'] as string, 10);
+  const now = Date.now();
+  const fiveMinutes = 5 * 60 * 1000;
+  
+  if (isNaN(timestamp) || Math.abs(now - timestamp) > fiveMinutes) {
+    return res.status(401).json({ error: 'Request expired' });
+  }
+
+  // 3. Verify HMAC signature
+  const signature = req.headers['x-gateway-signature'] as string;
+  const requestId = req.headers['x-request-id'] as string;
+  const signedPath = req.headers['x-signed-path'] as string || req.path;
+  
+  // Format: method:path:timestamp:requestId
+  // Body is intentionally excluded to avoid canonicalization issues
+  const payload = `${req.method}:${signedPath}:${timestamp}:${requestId}`;
+  const expectedSignature = createSignature(SERVICE_SECRET_KEY!, payload);
+
+  if (!timingSafeEqual(signature, expectedSignature)) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+
+  // 4. Extract user context
+  req.userId = req.headers['x-user-id'] as string;
+  req.userEmail = req.headers['x-user-email'] as string;
+  req.authMethod = req.headers['x-auth-method'] as string;
+  req.gatewayRequestId = req.headers['x-request-id'] as string;
+
+  next();
+}
+
+// Sign responses
+function signResponse(req: GatewayRequest, res: Response, next: NextFunction) {
+  const originalJson = res.json.bind(res);
+  
+  res.json = (body: unknown) => {
+    const timestamp = Date.now();
+    const bodyHash = crypto.createHash('sha256')
+      .update(JSON.stringify(body))
+      .digest('hex');
+    
+    const payload = `${req.gatewayRequestId}:${res.statusCode}:${timestamp}:${bodyHash}`;
+    const signature = createSignature(SERVICE_SECRET_KEY!, payload);
+
+    res.set('X-Response-Signature', signature);
+    res.set('X-Response-Timestamp', timestamp.toString());
+
+    return originalJson(body);
+  };
+
+  next();
+}
+
+// Apply middleware
+app.use(validateGatewayRequest);
+app.use(signResponse);
+
+// Protected route
+app.get('/users', (req: GatewayRequest, res: Response) => {
+  console.log(`Request from user: ${req.userId} via ${req.authMethod}`);
+  
+  res.json({
+    users: [
+      { id: '1', name: 'Alice' },
+      { id: '2', name: 'Bob' }
+    ]
+  });
+});
+
+app.listen(3001, () => console.log('Backend listening on port 3001'));
+```
+
+---
+
+# API Reference
+
+## Rate Limits
+
+| Tier | Limit | Window |
+|------|-------|--------|
+| Standard | 100 requests | 1 minute |
+| Strict | 10 requests | 1 minute |
+| Generous | 1000 requests | 1 minute |
+
+## HTTP Status Codes
+
+| Code | Meaning |
+|------|---------|
+| 200 | Success |
+| 400 | Bad Request - Invalid parameters |
+| 401 | Unauthorized - Missing or invalid authentication |
+| 403 | Forbidden - Valid auth but insufficient permissions |
+| 404 | Not Found - Service or endpoint not found |
+| 429 | Too Many Requests - Rate limit exceeded |
+| 500 | Internal Server Error |
+| 502 | Bad Gateway - Backend service error |
+| 503 | Service Unavailable - Backend temporarily down |
+| 504 | Gateway Timeout - Backend did not respond |
+
+## Error Response Format
+
+```json
+{
+  "error": "Error Type",
+  "message": "Detailed error message",
+  "requestId": "uuid-here",
+  "retryAfter": 60
+}
+```
+
+---
+
+# Implementation in MedPlum Repo
+
+## What DevOps Needs To Do
+
+The Gateway already exists. The DevOps engineer needs to:
+
+### 1. Register Backend Services
+
+Register the MedPlum-based services with the Gateway:
+
+| Service | Slug | Description |
+|---------|------|-------------|
+| Template Service | `templates` | Template CRUD, sections |
+| Questionnaire Service | `questionnaires` | Questionnaire management |
+| Patient Service | `patients` | Patient data |
+| Appointment Service | `appointments` | Appointment management |
+| Notification Service | `notifications` | Send questionnaires |
+
+### 2. Implement Backend Validation Middleware
+
+Each MedPlum service needs the HMAC validation middleware (see Backend Service Integration above).
+
+### 3. Configure CORS
+
+Ensure the Gateway allows cross-origin requests from brand app domains:
+
+- `https://healthtalk.ai`
+- `https://coachi.ai`
+- `https://medsafe.ai`
+- `https://medrecord.nl`
+
+### 4. Set Up Environment Variables
+
+In the MedPlum deployment:
+
+```bash
+# Gateway integration
+GATEWAY_API_KEY=gwk_xxx
+SERVICE_SECRET_KEY=ssk_xxx
+
+# For M2M calls from MedPlum to Gateway (if needed)
+CLIENT_API_KEY=cak_xxx
+```
+
+---
+
+# Related Documents
+
+| Document | Description |
+|----------|-------------|
+| [sdk-specification.mdx](./sdk-specification.mdx) | SDK that wraps Gateway calls |
+| [platform-architecture.mdx](./platform-architecture.mdx) | Overall architecture |
+| [multi-brand.mdx](../standards/multi-brand.mdx) | Brand configuration |

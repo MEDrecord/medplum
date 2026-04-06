@@ -1,0 +1,64 @@
+# MEDrecord Platform Agent Configuration
+# Base configuration inherited by all brand apps
+
+name: "@mrd/agents"
+description: "MEDrecord platform agent definitions for multi-brand healthcare applications"
+
+# Standard folder structure (all brands inherit these)
+# 1. Instincts - Coding guidelines and behavioral rules
+# 2. Patterns  - Reusable code and architecture patterns
+# 3. Skills    - Domain-specific capabilities and knowledge
+# 4. Specs     - Technical specifications and API references
+# 5. Standards - Conventions and requirements
+
+instincts:
+  - instincts/coding.mdx             # Platform-wide coding rules
+
+patterns:
+  - patterns/gateway-client.mdx      # GatewayClient usage patterns
+  - patterns/sdk-hooks.mdx           # React hook patterns for SDK
+
+skills:
+  - skills/fhir.mdx                  # FHIR operations and resources
+
+specs:
+  - specs/platform-architecture.mdx  # Overall architecture (SDK, Gateway, Apps)
+  - specs/package-structure.mdx      # Monorepo package dependencies
+  - specs/gateway-service.mdx        # Gateway API specification
+  - specs/sdk-specification.mdx      # @mrd/sdk API reference
+
+standards:
+  - standards/api-design.mdx         # API route conventions
+  - standards/multi-brand.mdx        # Brand configuration standards
+  - standards/fhir-extensions.mdx    # MEDrecord FHIR extensions
+
+# Platform settings
+settings:
+  default_locale: "nl-NL"
+  supported_locales:
+    - nl-NL
+    - en-US
+    - de-DE
+
+# Supported brands
+brands:
+  - healthtalk
+  - coachi
+  - medsafe
+  - medrecord
+
+# Non-negotiable platform rules
+rules:
+  - Frontend → API Route → Gateway → Database. Always.
+  - No direct database access from client code.
+  - All backend operations run server-side only.
+  - Every request verified with auth.id from gateway.
+  - UI uses shadcn/ui components only.
+  - All styling via design tokens. No custom CSS, no inline styles.
+  - Do not assume. If ambiguous, STOP and ask.
+
+# Package references
+packages:
+  sdk: "@mrd/sdk"
+  shared: "@mrd/shared"
+  ui: "@mrd/ui"

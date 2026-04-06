@@ -16,6 +16,9 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@mrd/shared": "file:../shared"
+  },
   "peerDependencies": {
     "@medplum/fhirtypes": "^5.0.0",
     "react": "^18.0.0 || ^19.0.0",
