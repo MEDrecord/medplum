@@ -9,9 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@mrd/sdk": "workspace:*",
-    "@mrd/shared": "workspace:*",
-    "@mrd/ui": "workspace:*",
+    "@mrd/sdk": "*",
+    "@mrd/shared": "*",
+    "@mrd/ui": "*",
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@medplum/fhirtypes": "workspace:*"
+    "@medplum/fhirtypes": "*"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mrd/shared": "workspace:*"
+    "@mrd/shared": "*"
   },
   "peerDependencies": {
     "@medplum/fhirtypes": "^5.0.0",
