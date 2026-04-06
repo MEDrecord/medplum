@@ -541,6 +541,71 @@ CLIENT_API_KEY=cak_xxx
 
 ---
 
+---
+
+# Notification Gateway (SEPARATE PROJECT)
+
+> **Important**: The Notification Gateway is a **separate Vercel project** hosted at `gateway.healthtalk.ai`. It is NOT part of the MedPlum repository.
+
+## What Is The Notification Gateway?
+
+The Notification Gateway handles multi-channel delivery of messages to patients:
+
+| Channel | Provider | Purpose |
+|---------|----------|---------|
+| WhatsApp | Twilio | Interactive questionnaire delivery |
+| SMS | Twilio | Fallback text messages |
+| Email | Postmark | Formal communications |
+| Voice | ElevenLabs | AI voice calls |
+
+## Architecture Separation
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MedPlum Repository (THIS REPO)                                             │
+│                                                                             │
+│  - Brand Apps (healthtalk, coachi, medsafe, medrecord)                      │
+│  - FHIR Backend (MedPlum Server)                                            │
+│  - Task Creation UI (admin sends questionnaire)                             │
+│  - Patient Form UI (patient completes questionnaire)                        │
+│  - Score Display (clinician views results)                                  │
+│                                                                             │
+│  Hosted: app.healthtalk.ai, app.coachi.ai, etc.                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      │ MedPlum Subscription (Task created)
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Notification Gateway (SEPARATE VERCEL PROJECT)                             │
+│                                                                             │
+│  - Twilio WhatsApp/SMS integration                                          │
+│  - Postmark Email integration                                               │
+│  - ElevenLabs Voice integration                                             │
+│  - Redis session state for WhatsApp conversations                           │
+│  - Magic link generation                                                    │
+│                                                                             │
+│  Hosted: gateway.healthtalk.ai                                              │
+│  Repo: (separate repository - NOT in MedPlum)                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## How It Works
+
+1. **Admin creates Task** in MedPlum (via HealthTalk app)
+2. **MedPlum Subscription** fires webhook to Notification Gateway
+3. **Notification Gateway** sends message via selected channel (WhatsApp, SMS, Email)
+4. **Patient clicks magic link** → opens form in HealthTalk app
+5. **Patient submits** → QuestionnaireResponse + Observation stored in MedPlum
+
+## For DevOps
+
+The Notification Gateway specifications are documented in:
+- `mrd/apps/healthtalk/.agents/specs/notification-gateway.mdx`
+
+This document describes the API contracts and integration patterns. The actual implementation is in a separate repository and Vercel project.
+
+---
+
 # Related Documents
 
 | Document | Description |
@@ -548,3 +613,4 @@ CLIENT_API_KEY=cak_xxx
 | [sdk-specification.mdx](./sdk-specification.mdx) | SDK that wraps Gateway calls |
 | [platform-architecture.mdx](./platform-architecture.mdx) | Overall architecture |
 | [multi-brand.mdx](../standards/multi-brand.mdx) | Brand configuration |
+| [notification-gateway.mdx](../../apps/healthtalk/.agents/specs/notification-gateway.mdx) | Notification Gateway specs (separate project) |

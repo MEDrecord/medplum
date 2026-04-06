@@ -8,3 +8,4 @@ export * from './template';
 export * from './appointment';
 export * from './user';
 export * from './questionnaire';
+export * from './task';

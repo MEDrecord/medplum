@@ -5,7 +5,18 @@ section: 7
 
 # Notification Gateway
 
-The Notification Gateway is a separate Vercel project (`gateway.healthtalk.ai`) that handles all outbound patient communications and provider integrations.
+> **IMPORTANT: SEPARATE PROJECT**
+> 
+> The Notification Gateway is **NOT** part of the MedPlum repository. It is a separate Vercel project that must be built and deployed independently.
+> 
+> | Property | Value |
+> |----------|-------|
+> | Domain | `gateway.healthtalk.ai` |
+> | Repository | Separate (not MedPlum) |
+> | Deployment | Separate Vercel project |
+> | Purpose | Multi-channel message delivery |
+
+The Notification Gateway handles all outbound patient communications and provider integrations.
 
 ## Architecture
 
