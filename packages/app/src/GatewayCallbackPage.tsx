@@ -70,71 +70,36 @@ export function GatewayCallbackPage(): JSX.Element {
   }, [config.gatewayUrl]);
 
   /**
-   * Provision Practitioner using Medplum client credentials
-   * This creates a Practitioner linked to the Gateway user
+   * Provision Practitioner via Gateway API
+   * 
+   * Calls POST /api/user/provision-practitioner on the Gateway.
+   * The Gateway uses Medplum service account to create/update Practitioner.
    */
   const provisionPractitioner = useCallback(async (user: GatewayUser, sessionId: string): Promise<void> => {
     try {
-      console.log('[Gateway] Provisioning Practitioner for:', user.email);
-      
-      // Use the Gateway proxy to create Practitioner (gateway has service account access)
       const gatewayUrl = config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai';
       
-      const nameParts = (user.name || user.email.split('@')[0]).split(' ');
-      const givenName = nameParts[0] || '';
-      const familyName = nameParts.slice(1).join(' ') || nameParts[0] || '';
-
-      const practitionerData = {
-        resourceType: 'Practitioner',
-        identifier: [{
-          system: 'https://healthtalk.ai/gateway/user',
-          value: user.id,
-        }],
-        name: [{
-          given: [givenName],
-          family: familyName,
-        }],
-        telecom: [
-          { system: 'email', value: user.email, use: 'work' },
-        ],
-        active: true,
-      };
-
-      // Call gateway proxy to create/update Practitioner
-      const response = await fetch(`${gatewayUrl}/api/gateway/proxy/medplum/fhir/R4/Practitioner`, {
+      const response = await fetch(`${gatewayUrl}/api/user/provision-practitioner`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/fhir+json',
+          'Content-Type': 'application/json',
           'X-Session-Id': sessionId,
         },
-        body: JSON.stringify(practitionerData),
+        credentials: 'include',
       });
 
       if (response.ok) {
-        const practitioner = await response.json();
-        console.log('[Gateway] Practitioner provisioned:', practitioner.id);
+        const result = await response.json();
+        console.log('[Gateway] Practitioner provisioned:', result.practitionerId);
+      } else if (response.status === 404) {
+        // Endpoint doesn't exist yet - skip silently
+        console.log('[Gateway] Provision endpoint not available');
       } else {
-        // Try to search for existing and update
-        console.log('[Gateway] Create failed, searching for existing...');
-        const searchResponse = await fetch(
-          `${gatewayUrl}/api/gateway/proxy/medplum/fhir/R4/Practitioner?identifier=https://healthtalk.ai/gateway/user|${user.id}`,
-          {
-            headers: {
-              'X-Session-Id': sessionId,
-            },
-          }
-        );
-        
-        if (searchResponse.ok) {
-          const bundle = await searchResponse.json();
-          if (bundle.entry?.length > 0) {
-            console.log('[Gateway] Found existing Practitioner');
-          }
-        }
+        const error = await response.json().catch(() => ({}));
+        console.warn('[Gateway] Provision failed:', error);
       }
     } catch (err) {
-      // Log but don't fail the auth flow
-      console.warn('[Gateway] Practitioner provisioning failed:', err);
+      console.warn('[Gateway] Practitioner provisioning error:', err);
     }
   }, [config.gatewayUrl]);
 
@@ -154,12 +119,31 @@ export function GatewayCallbackPage(): JSX.Element {
       if (webToken) {
         // Step 1: Exchange webToken for sessionId
         setStatus('exchanging');
-        const result = await exchangeWebToken(webToken);
         
-        // Store session data in localStorage
-        localStorage.setItem('gateway.sessionId', result.sessionId);
-        localStorage.setItem('gateway.user', JSON.stringify(result.user));
-        localStorage.setItem('gateway.expiresAt', result.expiresAt);
+        let result: ExchangeResponse;
+        try {
+          result = await exchangeWebToken(webToken);
+          
+          // Store session data in localStorage
+          localStorage.setItem('gateway.sessionId', result.sessionId);
+          localStorage.setItem('gateway.user', JSON.stringify(result.user));
+          localStorage.setItem('gateway.expiresAt', result.expiresAt);
+        } catch (exchangeError) {
+          // Token might be already used (page refresh) - check if we have stored session
+          const storedSessionId = localStorage.getItem('gateway.sessionId');
+          const storedUser = localStorage.getItem('gateway.user');
+          
+          if (storedSessionId && storedUser) {
+            console.log('[Gateway] Using stored session (token already exchanged)');
+            result = {
+              sessionId: storedSessionId,
+              user: JSON.parse(storedUser),
+              expiresAt: localStorage.getItem('gateway.expiresAt') || '',
+            };
+          } else {
+            throw exchangeError;
+          }
+        }
         
         // Step 2: Provision Practitioner profile
         setStatus('provisioning');
@@ -179,7 +163,22 @@ export function GatewayCallbackPage(): JSX.Element {
         return;
       }
 
-      // No webToken - might be cookie mode or error
+      // Check if we have a stored session (returning user)
+      const storedSessionId = localStorage.getItem('gateway.sessionId');
+      const storedUser = localStorage.getItem('gateway.user');
+      if (storedSessionId && storedUser) {
+        const user = JSON.parse(storedUser) as GatewayUser;
+        showNotification({
+          title: 'Already signed in',
+          message: `Welcome back, ${user.name || user.email || 'User'}!`,
+          color: 'teal',
+        });
+        const nextUrl = searchParams.get('next');
+        navigate(nextUrl?.startsWith('/') ? nextUrl : '/', { replace: true });
+        return;
+      }
+
+      // No webToken and no stored session
       throw new Error('No authentication token received');
 
     } catch (err) {
