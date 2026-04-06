@@ -8,13 +8,13 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import packageJson from './package.json' with { type: 'json' };
 
-// Only copy .env.defaults in local dev when no .env exists AND no
-// MEDPLUM_BASE_URL is provided via process environment (e.g. Vercel).
-// Without this guard, .env.defaults (localhost:8103) silently overrides
-// the Vercel dashboard env var because Vite .env files take precedence
-// over process.env for import.meta.env.
-if (!existsSync(path.join(__dirname, '.env')) && !process.env.MEDPLUM_BASE_URL) {
-  copyFileSync(path.join(__dirname, '.env.defaults'), path.join(__dirname, '.env'));
+// Only copy .env.defaults for local dev when no .env exists AND no
+// MEDPLUM_BASE_URL is provided via the process environment (e.g. Vercel).
+// .env.defaults ships localhost:8103 which silently overrides Vercel dashboard
+// env vars because Vite .env files take precedence over process.env.
+const envDefaultsPath = path.join(__dirname, '.env.defaults');
+if (!existsSync(path.join(__dirname, '.env')) && !process.env.MEDPLUM_BASE_URL && existsSync(envDefaultsPath)) {
+  copyFileSync(envDefaultsPath, path.join(__dirname, '.env'));
 }
 
 let gitHash;
@@ -26,8 +26,25 @@ try {
 
 process.env.MEDPLUM_VERSION = packageJson.version + '-' + gitHash;
 
+// When process.env has MEDPLUM_BASE_URL (Vercel, CI), force it into
+// import.meta.env so it cannot be overridden by a stale .env / .env.defaults.
+// Vite's `define` takes precedence over env-file loading.
+function envOverrides(): Record<string, string> {
+  const overrides: Record<string, string> = {};
+  const keys = ['MEDPLUM_BASE_URL', 'MEDPLUM_CLIENT_ID', 'MEDPLUM_REGISTER_ENABLED',
+    'MEDPLUM_AWS_TEXTRACT_ENABLED', 'MEDPLUM_GATEWAY_URL', 'MEDPLUM_GATEWAY_TENANT_ID',
+    'MEDPLUM_GATEWAY_ENABLED', 'GOOGLE_CLIENT_ID', 'RECAPTCHA_SITE_KEY'];
+  for (const key of keys) {
+    if (process.env[key]) {
+      overrides[`import.meta.env.${key}`] = JSON.stringify(process.env[key]);
+    }
+  }
+  return overrides;
+}
+
 export default defineConfig({
   envPrefix: ['MEDPLUM_', 'GOOGLE_', 'RECAPTCHA_'],
+  define: envOverrides(),
   plugins: [react()],
   server: {
     port: 3000,
