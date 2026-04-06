@@ -10,6 +10,10 @@
 export {
   verifyGatewayAuth,
   GatewayAuthError,
+  hasRole,
+  isAdmin,
+  isPractitioner,
   type GatewayAuthResponse,
   type GatewayAuthContext,
+  type GatewayError,
 } from '../../medrecord/lib/gateway';

@@ -17,8 +17,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // In production, call the Gateway API
-    const gatewayUrl = process.env.NEXT_PUBLIC_GATEWAY_URL || 'https://auth-test-b2c.healthtalk.ai';
+    // Call the Gateway API (server-only env var — never expose to client)
+    const gatewayUrl = process.env.GATEWAY_URL || 'https://auth-test-b2c.healthtalk.ai';
     
     // Step 1: Submit the questionnaire response
     const submitResponse = await fetch(`${gatewayUrl}/api/gateway/proxy/questionnaires/${questionnaireId}/responses/`, {
@@ -65,23 +65,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('[submit-questionnaire] Error:', error);
-    
-    // Return success in development for testing
-    if (process.env.NODE_ENV === 'development') {
-      return NextResponse.json({
-        success: true,
-        responseId: 'response-' + Date.now(),
-        score: {
-          totalScore: 12,
-          maxScore: 27,
-          percentage: 44,
-          severity: 'moderate',
-          severityLabel: 'Matig',
-          color: '#F97316',
-        },
-      });
-    }
-
     return NextResponse.json(
       { error: 'Submission failed' },
       { status: 500 }
