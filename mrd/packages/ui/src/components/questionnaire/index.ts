@@ -24,3 +24,11 @@ export {
   QuestionnaireBuilder,
   type QuestionnaireBuilderProps,
 } from './questionnaire-builder';
+
+// Send Questionnaire Modal
+export {
+  SendQuestionnaireModal,
+  type SendQuestionnaireModalProps,
+  type QuestionnaireSummary,
+  type PatientSummary,
+} from './send-questionnaire-modal';

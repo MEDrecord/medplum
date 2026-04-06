@@ -58,11 +58,16 @@ The MEDrecord platform is a multi-brand healthcare application ecosystem built o
                     ┌───────────────┼───────────────┐
                     │               │               │
                     ▼               ▼               ▼
-          ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-          │ MedPlum     │  │ Own GPU     │  │ Twilio      │
-          │ FHIR Server │  │ (AI Models) │  │ ElevenLabs  │
-          │             │  │             │  │ Postmark    │
-          └─────────────┘  └─────────────┘  └─────────────┘
+          ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────────┐
+          │ MedPlum     │  │ Own GPU     │  │ Communication Gateway       │
+          │ FHIR Server │  │ (AI Models) │  │ (SEPARATE VERCEL PROJECT)   │
+          │             │  │             │  │                             │
+          │             │  │             │  │ - Twilio (WhatsApp/SMS)     │
+          │             │  │             │  │ - Postmark (Email)          │
+          │             │  │             │  │ - ElevenLabs (Voice)        │
+          │             │  │             │  │                             │
+          │             │  │             │  │ See: communication-gateway.mdx│
+          └─────────────┘  └─────────────┘  └─────────────────────────────┘
 ```
 
 ## Core Principles
@@ -159,3 +164,7 @@ Sensitive operations and credentials exist only in the Gateway:
 | [gateway-service.mdx](./gateway-service.mdx) | Gateway API routes and authentication |
 | [sdk-specification.mdx](./sdk-specification.mdx) | @mrd/sdk API reference |
 | [package-structure.mdx](./package-structure.mdx) | Package dependencies and setup |
+| [communication-gateway.mdx](./communication-gateway.mdx) | Communication Gateway (separate Vercel project) - Twilio, Postmark, ElevenLabs |
+| [fhir-resources.mdx](./fhir-resources.mdx) | FHIR resource mappings |
+| [questionnaire-builder.mdx](./questionnaire-builder.mdx) | Questionnaire system specification |
+| [template-system.mdx](./template-system.mdx) | Template system specification |

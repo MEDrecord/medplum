@@ -1,22 +1,56 @@
 ---
-title: Notification Gateway
+title: Communication Gateway
 section: 7
 ---
 
-# Notification Gateway
+# Communication Gateway
 
-The Notification Gateway is a separate Vercel project (`gateway.healthtalk.ai`) that handles all outbound patient communications and provider integrations.
+> **MONOREPO APP**
+> 
+> The Communication Gateway is part of the MedPlum monorepo as a separate Next.js app with its own Vercel deployment.
+> 
+> | Property | Value |
+> |----------|-------|
+> | Location | `mrd/apps/communication-gateway/` |
+> | Domain | `comms.medrecord.nl` (or `comms.healthtalk.ai`) |
+> | Deployment | Separate Vercel project (same repo) |
+> | Purpose | Multi-channel patient communication for all brands |
+
+The Communication Gateway handles all outbound patient communications and provider integrations for **all brand apps** (HealthTalk, Coachi, MedSafe, MEDrecord).
+
+## Environment Variables
+
+```bash
+# Twilio
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_WHATSAPP_NUMBER=whatsapp:+31...
+TWILIO_SMS_NUMBER=+31...
+
+# MedPlum
+MEDPLUM_BASE_URL=https://medplumapivercal.healthtalk.ai
+MEDPLUM_CLIENT_ID=communication-gateway
+MEDPLUM_CLIENT_SECRET=...
+
+# Redis (Upstash)
+UPSTASH_REDIS_REST_URL=...
+UPSTASH_REDIS_REST_TOKEN=...
+
+# Security
+WEBHOOK_SECRET=... # For MedPlum subscription verification
+MAGIC_LINK_SECRET=... # For JWT signing
+```
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                      NOTIFICATION GATEWAY                                │
-│                    gateway.healthtalk.ai                                 │
+│                      COMMUNICATION GATEWAY                               │
+│                      comms.medrecord.nl                                  │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                         │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                     POST /api/notify                             │   │
+│  │                     POST /api/send                               │   │
 │  │  - Receives Task reference from MedPlum subscription            │   │
 │  │  - Resolves Patient, Questionnaire, channel preference          │   │
 │  │  - Routes to appropriate channel handler                        │   │
@@ -48,17 +82,17 @@ The Notification Gateway is a separate Vercel project (`gateway.healthtalk.ai`) 
 
 ## API Endpoints
 
-### POST /api/notify
+### POST /api/send
 
-Entry point for all notifications. Called by MedPlum subscription.
+Entry point for all patient communications. Called by MedPlum subscription.
 
 ```typescript
-interface NotifyRequest {
+interface SendRequest {
   taskId: string;
   action: 'send' | 'remind' | 'cancel';
 }
 
-interface NotifyResponse {
+interface SendResponse {
   success: boolean;
   channel: string;
   messageId?: string;

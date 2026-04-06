@@ -1,0 +1,956 @@
+openapi: 3.0.3
+info:
+  title: MEDrecord Gateway API
+  description: |
+    Gateway API for MEDrecord platform brand apps (HealthTalk, Coachi, MedSafe, MEDrecord).
+    
+    This API provides a unified interface to MedPlum FHIR resources with brand-aware 
+    authentication and authorization.
+  version: 1.0.0
+  contact:
+    name: MEDrecord Development Team
+    url: https://medrecord.nl
+
+servers:
+  - url: https://auth-test-b2c.healthtalk.ai
+    description: HealthTalk Gateway (Test)
+  - url: https://gateway.coachi.ai
+    description: Coachi Gateway
+  - url: https://gateway.medsafe.ai
+    description: MedSafe Gateway
+  - url: https://gateway.medrecord.nl
+    description: MEDrecord Gateway
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Auth
+    description: Authentication endpoints
+  - name: Templates
+    description: Template management (PlanDefinition resources)
+  - name: Questionnaires
+    description: Questionnaire management (FHIR Questionnaire/QuestionnaireResponse)
+  - name: Tasks
+    description: Task management for questionnaire delivery
+  - name: Patients
+    description: Patient data access
+  - name: Appointments
+    description: Appointment management
+
+paths:
+  # ============================================
+  # Auth
+  # ============================================
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login with credentials
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user profile
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+
+  # ============================================
+  # Templates
+  # ============================================
+  /templates:
+    get:
+      tags: [Templates]
+      summary: List templates
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, active, retired]
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateListResponse'
+
+    post:
+      tags: [Templates]
+      summary: Create template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTemplateRequest'
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+
+  /templates/{id}:
+    get:
+      tags: [Templates]
+      summary: Get template by ID
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Templates]
+      summary: Update template
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTemplateRequest'
+      responses:
+        '200':
+          description: Template updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateResponse'
+
+    delete:
+      tags: [Templates]
+      summary: Delete template (draft only)
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Template deleted
+
+  # ============================================
+  # Questionnaires
+  # ============================================
+  /questionnaires:
+    get:
+      tags: [Questionnaires]
+      summary: List questionnaires
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, active, retired]
+        - name: hasScoring
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Questionnaire list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionnaireListResponse'
+
+    post:
+      tags: [Questionnaires]
+      summary: Create questionnaire
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuestionnaireRequest'
+      responses:
+        '201':
+          description: Questionnaire created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionnaireResponse'
+
+  /questionnaires/{id}:
+    get:
+      tags: [Questionnaires]
+      summary: Get questionnaire by ID
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Questionnaire details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionnaireResponse'
+
+    patch:
+      tags: [Questionnaires]
+      summary: Update questionnaire
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateQuestionnaireRequest'
+      responses:
+        '200':
+          description: Questionnaire updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionnaireResponse'
+
+    delete:
+      tags: [Questionnaires]
+      summary: Delete questionnaire (draft only)
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Questionnaire deleted
+
+  /questionnaires/{id}/publish:
+    post:
+      tags: [Questionnaires]
+      summary: Publish questionnaire (draft -> active)
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Questionnaire published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionnaireResponse'
+
+  /questionnaires/{id}/responses:
+    get:
+      tags: [Questionnaires]
+      summary: List responses for questionnaire
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: patientId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Response list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionnaireResponseListResponse'
+
+    post:
+      tags: [Questionnaires]
+      summary: Submit questionnaire response
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitQuestionnaireRequest'
+      responses:
+        '201':
+          description: Response submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitQuestionnaireResponse'
+
+  # ============================================
+  # Tasks
+  # ============================================
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: List questionnaire tasks
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [requested, in-progress, completed, cancelled, failed]
+        - name: patientId
+          in: query
+          schema:
+            type: string
+        - name: questionnaireId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskListResponse'
+
+    post:
+      tags: [Tasks]
+      summary: Create task (send questionnaire to patient)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /tasks/{id}:
+    get:
+      tags: [Tasks]
+      summary: Get task by ID
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /tasks/{id}/cancel:
+    post:
+      tags: [Tasks]
+      summary: Cancel task
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Task cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /tasks/{id}/resend:
+    post:
+      tags: [Tasks]
+      summary: Resend notification for task
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendTaskRequest'
+      responses:
+        '200':
+          description: Notification resent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /tasks/validate-token:
+    post:
+      tags: [Tasks]
+      summary: Validate magic link token (for patient form)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Token valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateTokenResponse'
+        '400':
+          description: Token invalid or expired
+
+  # ============================================
+  # Patients
+  # ============================================
+  /patients:
+    get:
+      tags: [Patients]
+      summary: List patients
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Patient list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientListResponse'
+
+  /patients/{id}:
+    get:
+      tags: [Patients]
+      summary: Get patient by ID
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Patient details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        maximum: 100
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    PaginatedResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    # Auth
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, clinician, patient]
+        organizationId:
+          type: string
+
+    # Templates
+    TemplateListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/TemplateSummary'
+
+    TemplateSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [draft, active, retired]
+        sectionCount:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+
+    TemplateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        planDefinition:
+          type: object
+          description: FHIR PlanDefinition resource
+        metadata:
+          type: object
+          properties:
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+
+    CreateTemplateRequest:
+      type: object
+      required: [name, title]
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        sections:
+          type: array
+          items:
+            type: object
+
+    UpdateTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        sections:
+          type: array
+          items:
+            type: object
+
+    # Questionnaires
+    QuestionnaireListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/QuestionnaireSummary'
+
+    QuestionnaireSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum: [draft, active, retired]
+        itemCount:
+          type: integer
+        hasScoring:
+          type: boolean
+        loincCode:
+          type: string
+
+    QuestionnaireResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        questionnaire:
+          type: object
+          description: FHIR Questionnaire resource
+        scoreConfig:
+          type: object
+          description: Score configuration if scoring enabled
+        metadata:
+          type: object
+
+    CreateQuestionnaireRequest:
+      type: object
+      required: [name, title, items]
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+        scoreConfig:
+          type: object
+        loincCode:
+          type: string
+
+    UpdateQuestionnaireRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        title:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+        scoreConfig:
+          type: object
+
+    QuestionnaireResponseListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  patientId:
+                    type: string
+                  patientName:
+                    type: string
+                  submittedAt:
+                    type: string
+                    format: date-time
+                  score:
+                    type: integer
+                  severity:
+                    type: string
+
+    SubmitQuestionnaireRequest:
+      type: object
+      required: [response, patientId]
+      properties:
+        response:
+          type: object
+          description: FHIR QuestionnaireResponse resource
+        patientId:
+          type: string
+
+    SubmitQuestionnaireResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        responseId:
+          type: string
+        score:
+          type: object
+          properties:
+            totalScore:
+              type: integer
+            maxScore:
+              type: integer
+            severity:
+              type: string
+            severityLabel:
+              type: string
+
+    # Tasks
+    TaskListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/TaskSummary'
+
+    TaskSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [requested, in-progress, completed, cancelled, failed]
+        businessStatus:
+          type: string
+        patientId:
+          type: string
+        patientName:
+          type: string
+        questionnaireId:
+          type: string
+        questionnaireTitle:
+          type: string
+        channel:
+          type: string
+          enum: [web, whatsapp, sms, email, voice]
+        createdAt:
+          type: string
+          format: date-time
+        dueDate:
+          type: string
+          format: date-time
+
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        task:
+          type: object
+          description: FHIR Task resource
+        patient:
+          type: object
+        questionnaire:
+          type: object
+        deliveryHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              channel:
+                type: string
+              status:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+
+    CreateTaskRequest:
+      type: object
+      required: [patientId, questionnaireId, channel]
+      properties:
+        patientId:
+          type: string
+        questionnaireId:
+          type: string
+        channel:
+          type: string
+          enum: [web, whatsapp, sms, email, voice]
+        channelConfig:
+          type: object
+          properties:
+            contactValue:
+              type: string
+            customMessage:
+              type: string
+        dueDate:
+          type: string
+          format: date-time
+        priority:
+          type: string
+          enum: [routine, urgent, asap, stat]
+        reminders:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            intervalHours:
+              type: integer
+            maxReminders:
+              type: integer
+
+    ResendTaskRequest:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum: [whatsapp, sms, email, voice]
+        contactValue:
+          type: string
+
+    ValidateTokenResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        taskId:
+          type: string
+        patientId:
+          type: string
+        questionnaire:
+          type: object
+        expiresAt:
+          type: string
+          format: date-time
+
+    # Patients
+    PatientListResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedResponse'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/PatientSummary'
+
+    PatientSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        birthDate:
+          type: string
+          format: date
+        phone:
+          type: string
+        email:
+          type: string
+
+    PatientResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        patient:
+          type: object
+          description: FHIR Patient resource (nl-core-Patient profile)
+        contacts:
+          type: array
+          items:
+            type: object

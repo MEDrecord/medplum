@@ -1,8 +1,8 @@
-# HealthTalk Patient Questionnaire Module
+# MEDrecord Platform - Patient Questionnaire Module
 
 Technical & Functional Specification — v3.0
 
-**Product:** HealthTalk  
+**Platform:** MEDrecord (HealthTalk, Coachi, MedSafe, MEDrecord)  
 **Version:** 3.0 — Final pre-development  
 **Date:** April 2026  
 **Status:** Ready for Development  
@@ -16,7 +16,7 @@ Technical & Functional Specification — v3.0
 |----------|-------------|
 | [Architecture Overview](./architecture.mdx) | System architecture, FHIR version landscape, resource map |
 | [FHIR Resources](./fhir-resources.mdx) | Task lifecycle, Appointment flow, resource profiles |
-| [Notification Gateway](./notification-gateway.mdx) | Gateway architecture, channel selection, per-org config |
+| [Communication Gateway](./communication-gateway.mdx) | Gateway architecture, channel selection, per-org config |
 | [Channels Overview](./channels-overview.mdx) | All delivery channels overview and selection logic |
 | [Channel: Web Form](./channel-web-form.mdx) | Magic link web form |
 | [Channel: WhatsApp](./channel-whatsapp.mdx) | WhatsApp interactive |
@@ -48,7 +48,7 @@ Technical & Functional Specification — v3.0
 
 4. **Patient Language Layer:** Clinical terminology (LOINC/SNOMED/ICD) stays in the FHIR record. Patients only ever see plain-language text, managed in the builder.
 
-5. **Gateway-first delivery:** All channel integrations live behind a Notification Gateway. HealthTalk never imports Twilio, ElevenLabs, or Postmark SDKs directly.
+5. **Gateway-first delivery:** All channel integrations live behind the Communication Gateway. Brand apps never import Twilio, ElevenLabs, or Postmark SDKs directly.
 
 6. **Six delivery channels:** Web form, WhatsApp interactive, Voice agent (mobile + landline), Email, SMS. All write to the same `QuestionnaireResponse`.
 

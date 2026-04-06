@@ -417,12 +417,129 @@ export class GatewayClient {
   };
 
   // ============================================
-  // Notifications API
+  // Tasks API (Questionnaire Delivery)
+  // ============================================
+
+  tasks = {
+    /**
+     * List tasks with optional filters
+     */
+    list: (params?: import('@mrd/shared').TaskSearchParams): Promise<TaskListResponse> => {
+      const searchParams = new URLSearchParams();
+      if (params) {
+        Object.entries(params).forEach(([key, value]) => {
+          if (value !== undefined) {
+            if (Array.isArray(value)) {
+              value.forEach(v => searchParams.append(key, String(v)));
+            } else {
+              searchParams.set(key, String(value));
+            }
+          }
+        });
+      }
+      const query = searchParams.toString() ? '?' + searchParams.toString() : '';
+      return this.fetch<TaskListResponse>(`/${query}`, { serviceSlug: 'tasks' });
+    },
+
+    /**
+     * Get task by ID
+     */
+    get: (id: string): Promise<TaskDetailResponse> => {
+      return this.fetch<TaskDetailResponse>(`/${id}/`, { serviceSlug: 'tasks' });
+    },
+
+    /**
+     * Create new questionnaire task (send questionnaire to patient)
+     */
+    create: (data: import('@mrd/shared').CreateQuestionnaireTaskRequest): Promise<TaskDetailResponse> => {
+      return this.fetch<TaskDetailResponse>('/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        serviceSlug: 'tasks',
+      });
+    },
+
+    /**
+     * Update task
+     */
+    update: (id: string, data: import('@mrd/shared').UpdateTaskRequest): Promise<TaskDetailResponse> => {
+      return this.fetch<TaskDetailResponse>(`/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        serviceSlug: 'tasks',
+      });
+    },
+
+    /**
+     * Cancel task
+     */
+    cancel: (id: string): Promise<void> => {
+      return this.fetch<void>(`/${id}/cancel/`, {
+        method: 'POST',
+        serviceSlug: 'tasks',
+      });
+    },
+
+    /**
+     * Resend notification for a task
+     */
+    resend: (id: string, request?: import('@mrd/shared').ResendNotificationRequest): Promise<TaskDetailResponse> => {
+      return this.fetch<TaskDetailResponse>(`/${id}/resend/`, {
+        method: 'POST',
+        body: JSON.stringify(request ?? {}),
+        serviceSlug: 'tasks',
+      });
+    },
+
+    /**
+     * Get task statistics
+     */
+    getStatistics: (params?: { from?: string; to?: string }): Promise<import('@mrd/shared').TaskStatistics> => {
+      const query = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.fetch<import('@mrd/shared').TaskStatistics>(`/statistics/${query}`, { serviceSlug: 'tasks' });
+    },
+
+    /**
+     * Validate magic link token (for patient form)
+     */
+    validateToken: (token: string): Promise<import('@mrd/shared').ValidateMagicLinkResponse> => {
+      return this.fetch<import('@mrd/shared').ValidateMagicLinkResponse>(`/validate-token/`, {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+        serviceSlug: 'tasks',
+      });
+    },
+
+    /**
+     * Mark task as opened (patient clicked link)
+     */
+    markOpened: (id: string): Promise<void> => {
+      return this.fetch<void>(`/${id}/opened/`, {
+        method: 'POST',
+        serviceSlug: 'tasks',
+      });
+    },
+
+    /**
+     * Mark task as completed (patient submitted response)
+     */
+    markCompleted: (id: string, responseId: string): Promise<void> => {
+      return this.fetch<void>(`/${id}/completed/`, {
+        method: 'POST',
+        body: JSON.stringify({ responseId }),
+        serviceSlug: 'tasks',
+      });
+    },
+  };
+
+  // ============================================
+  // Notifications API (Legacy - use Tasks API)
   // ============================================
 
   notifications = {
     /**
      * Send notification via channel
+     * @deprecated Use tasks.create() instead
      */
     send: (request: SendNotificationRequest): Promise<void> => {
       return this.fetch<void>('/', {
@@ -680,3 +797,28 @@ export interface SendNotificationRequest {
   channel: 'whatsapp' | 'sms' | 'email' | 'voice';
   recipient: string;
 }
+
+// Task Types (re-export from shared for convenience)
+export type { 
+  TaskSearchParams,
+  CreateQuestionnaireTaskRequest,
+  UpdateTaskRequest,
+  ResendNotificationRequest,
+  TaskStatistics,
+  ValidateMagicLinkResponse,
+  QuestionnaireTaskSummary,
+  QuestionnaireTaskDetail,
+  DeliveryChannel,
+  ChannelConfig,
+  TaskStatus,
+  TaskPriority,
+} from '@mrd/shared';
+
+export interface TaskListResponse {
+  items: import('@mrd/shared').QuestionnaireTaskSummary[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface TaskDetailResponse extends import('@mrd/shared').QuestionnaireTaskDetail {}

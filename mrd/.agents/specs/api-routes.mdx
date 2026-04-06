@@ -2,7 +2,7 @@
 
 ## Principle
 
-HealthTalk Vercel routes do **not** import or call Twilio, ElevenLabs, Postmark, or any SIP library. All delivery operations go through the Notification Gateway. Vercel routes handle:
+Brand app Vercel routes do **not** import or call Twilio, ElevenLabs, Postmark, or any SIP library. All delivery operations go through the Communication Gateway. Vercel routes handle:
 
 - Scheduling logic (cron, appointment triggers)
 - FHIR operations in MedPlum
@@ -64,9 +64,9 @@ These routes are called by the gateway, not by ElevenLabs directly:
 
 ---
 
-## Notification Gateway API Routes (gateway.healthtalk.ai)
+## Communication Gateway API Routes (comms.medrecord.nl)
 
-The gateway is a separate Vercel project. These are its internal routes.
+The Communication Gateway is a separate Vercel project. These are its internal routes.
 
 ### Inbound from HealthTalk
 
