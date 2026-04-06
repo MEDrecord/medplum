@@ -62,6 +62,7 @@
   "dependencies": {
     "@docusaurus/plugin-content-docs": "^3.9.2",
     "@mrd/sdk": "^1.0.0",
+    "@mrd/shared": "^1.0.0",
     "@mrd/ui": "^0.1.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.71.1",

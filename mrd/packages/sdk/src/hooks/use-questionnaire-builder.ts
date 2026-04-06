@@ -259,7 +259,7 @@ const itemToFHIR = (item: QuestionnaireItemBuilder): FHIRQuestionnaireItem => {
   if (item.enableWhen && item.enableWhen.length > 0) {
     fhirItem.enableWhen = item.enableWhen.map(rule => ({
       question: rule.questionLinkId,
-      operator: rule.operator as FHIRQuestionnaireItem['enableWhen'][0]['operator'],
+      operator: rule.operator as NonNullable<FHIRQuestionnaireItem['enableWhen']>[0]['operator'],
       answerBoolean: typeof rule.answerValue === 'boolean' ? rule.answerValue : undefined,
       answerString: typeof rule.answerValue === 'string' ? rule.answerValue : undefined,
       answerInteger: typeof rule.answerValue === 'number' ? rule.answerValue : undefined,
@@ -757,7 +757,7 @@ export function useQuestionnaireBuilder(
       version: questionnaire.version,
       date: questionnaire.date ?? new Date().toISOString(),
       publisher: questionnaire.publisher,
-      subjectType: questionnaire.subjectType ?? ['Patient'],
+      subjectType: (questionnaire.subjectType ?? ['Patient']) as import('@medplum/fhirtypes').Questionnaire['subjectType'],
       item: questionnaire.items.map(itemToFHIR),
     };
 
