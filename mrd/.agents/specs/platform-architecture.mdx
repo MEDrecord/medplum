@@ -15,7 +15,7 @@ The MEDrecord platform is a multi-brand healthcare application ecosystem built o
 │                                                                             │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
 │  │ HealthTalk  │  │ Coachi      │  │ MedSafe     │  │ MEDrecord   │        │
-│  │ healthtalk/ │  │ coachi/     │  │ medsafe/    │  │ admin/      │        │
+│  │ healthtalk/ │  │ coachi/     │  │ medsafe/    │  │ medrecord/  │        │
 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘        │
 │         │                │                │                │               │
 │         └────────────────┼────────────────┼────────────────┘               │
@@ -115,12 +115,12 @@ Sensitive operations and credentials exist only in the Gateway:
                                                  │       │
                      ┌───────────────────────────┼───────┘
                      │                           │
-        ┌────────────┼────────────┐              │
-        │            │            │              │
-        ▼            ▼            ▼              │
-┌─────────────┐┌─────────────┐┌─────────────┐   │
-│ healthtalk/ ││ coachi/     ││ medsafe/    │ ◄─┘
-└─────────────┘└─────────────┘└─────────────┘
+        ┌────────────┼────────────┼────────────┐  │
+        │            │            │            │  │
+        ▼            ▼            ▼            ▼  │
+┌─────────────┐┌─────────────┐┌─────────────┐┌─────────────┐
+│ healthtalk/ ││ coachi/     ││ medsafe/    ││ medrecord/  │ ◄─┘
+└─────────────┘└─────────────┘└─────────────┘└─────────────┘
 ```
 
 ## Request Flow Example

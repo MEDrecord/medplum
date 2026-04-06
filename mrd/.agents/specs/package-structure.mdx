@@ -37,7 +37,7 @@ medplum/                              # Root (Medplum fork)
         ├── healthtalk/
         ├── coachi/
         ├── medsafe/
-        └── admin/
+        └── medrecord/
 ```
 
 ## Packages
@@ -232,14 +232,14 @@ mrd/packages/ui/
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              APPLICATIONS                                    │
 │                                                                             │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐│
-│  │ healthtalk/   │  │ coachi/       │  │ medsafe/      │  │ gateway/      ││
-│  │               │  │               │  │               │  │               ││
-│  │ Uses:         │  │ Uses:         │  │ Uses:         │  │ Uses:         ││
-│  │ - @mrd/sdk    │  │ - @mrd/sdk    │  │ - @mrd/sdk    │  │ - @mrd/shared ││
-│  │ - @mrd/ui     │  │ - @mrd/ui     │  │ - @mrd/ui     │  │ - @medplum/*  ││
-│  │ - @mrd/shared │  │ - @mrd/shared │  │ - @mrd/shared │  │               ││
-│  └───────────────┘  └───────────────┘  └───────────────┘  └───────────────┘│
+│  ┌─────────────┐┌─────────────┐┌─────────────┐┌─────────────┐┌─────────────┐│
+│  │ healthtalk/ ││ coachi/     ││ medsafe/    ││ medrecord/  ││ gateway/    ││
+│  │             ││             ││             ││             ││             ││
+│  │ Uses:       ││ Uses:       ││ Uses:       ││ Uses:       ││ Uses:       ││
+│  │ - @mrd/sdk  ││ - @mrd/sdk  ││ - @mrd/sdk  ││ - @mrd/sdk  ││ - @mrd/shared│
+│  │ - @mrd/ui   ││ - @mrd/ui   ││ - @mrd/ui   ││ - @mrd/ui   ││ - @medplum/*││
+│  │ - @mrd/shared│ - @mrd/shared│ - @mrd/shared│ - @mrd/shared│             ││
+│  └─────────────┘└─────────────┘└─────────────┘└─────────────┘└─────────────┘│
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
