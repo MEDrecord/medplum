@@ -22,18 +22,97 @@ function validateApiKey(request: NextRequest): boolean {
   return authHeader === `Bearer ${apiKey}`;
 }
 
-function getMedplumClient(): MedplumClient {
-  const baseUrl = process.env.MEDPLUM_BASE_URL || 'https://medplumapivercal.healthtalk.ai';
+// Check if we're in mock/development mode
+function isMockMode(): boolean {
   const clientId = process.env.MEDPLUM_CLIENT_ID;
   const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
+  return !clientId || !clientSecret;
+}
 
-  if (!clientId || !clientSecret) {
-    throw new Error('Medplum credentials not configured');
+function getMedplumClient(): MedplumClient | null {
+  if (isMockMode()) {
+    console.warn('[v0] Running in MOCK MODE - MedPlum credentials not configured');
+    return null;
   }
+
+  const baseUrl = process.env.MEDPLUM_BASE_URL || 'https://medplumapivercal.healthtalk.ai';
+  const clientId = process.env.MEDPLUM_CLIENT_ID!;
+  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET!;
 
   const client = new MedplumClient({ baseUrl });
   client.startClientLogin(clientId, clientSecret);
   return client;
+}
+
+// Mock questionnaire for testing
+function getMockQuestionnaire(taskId: string) {
+  return {
+    success: true,
+    task_id: taskId,
+    mock_mode: true,
+    patient_name: 'Test Patiënt',
+    questionnaire: {
+      id: 'mock-questionnaire-1',
+      title: 'Algemene Gezondheid Vragenlijst',
+      description: 'Een korte vragenlijst over uw algemene gezondheid',
+      total_questions: 5,
+      questions: [
+        {
+          id: 'q1',
+          index: 1,
+          text: 'Hoe zou u uw algemene gezondheid beoordelen?',
+          type: 'choice',
+          required: true,
+          options: [
+            { value: '1', label: 'Uitstekend' },
+            { value: '2', label: 'Zeer goed' },
+            { value: '3', label: 'Goed' },
+            { value: '4', label: 'Matig' },
+            { value: '5', label: 'Slecht' },
+          ],
+        },
+        {
+          id: 'q2',
+          index: 2,
+          text: 'Heeft u de afgelopen week pijn ervaren?',
+          type: 'choice',
+          required: true,
+          options: [
+            { value: 'yes', label: 'Ja' },
+            { value: 'no', label: 'Nee' },
+          ],
+        },
+        {
+          id: 'q3',
+          index: 3,
+          text: 'Hoeveel uur slaapt u gemiddeld per nacht?',
+          type: 'integer',
+          required: true,
+        },
+        {
+          id: 'q4',
+          index: 4,
+          text: 'Hoe zou u uw energieniveau beschrijven?',
+          type: 'choice',
+          required: true,
+          options: [
+            { value: '1', label: 'Zeer hoog' },
+            { value: '2', label: 'Hoog' },
+            { value: '3', label: 'Gemiddeld' },
+            { value: '4', label: 'Laag' },
+            { value: '5', label: 'Zeer laag' },
+          ],
+        },
+        {
+          id: 'q5',
+          index: 5,
+          text: 'Heeft u nog opmerkingen die u wilt delen?',
+          type: 'text',
+          required: false,
+        },
+      ],
+    },
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -50,7 +129,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'task_id is required' }, { status: 400 });
     }
 
+    // Return mock data if MedPlum is not configured
     const medplum = getMedplumClient();
+    if (!medplum) {
+      console.log('[v0] Returning mock questionnaire for task:', task_id);
+      return NextResponse.json(getMockQuestionnaire(task_id));
+    }
 
     // Fetch the Task
     const task = await medplum.readResource('Task', task_id) as Task;

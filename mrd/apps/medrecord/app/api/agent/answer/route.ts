@@ -21,15 +21,25 @@ function validateApiKey(request: NextRequest): boolean {
   return authHeader === `Bearer ${apiKey}`;
 }
 
-function getRedis(): Redis {
+// In-memory store for mock mode (development only)
+const mockSessions = new Map<string, SessionData>();
+
+function isMockMode(): boolean {
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  return !url || !token;
+}
+
+function getRedis(): Redis | null {
+  if (isMockMode()) {
+    console.warn('[v0] Running in MOCK MODE - Redis not configured, using in-memory storage');
+    return null;
+  }
+
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
-  if (!url || !token) {
-    throw new Error('Redis not configured');
-  }
-
-  return new Redis({ url, token });
+  return new Redis({ url: url!, token: token! });
 }
 
 interface Answer {
@@ -65,7 +75,14 @@ export async function POST(request: NextRequest) {
     const sessionKey = `voice-session:${task_id}`;
 
     // Get or create session
-    let session = await redis.get<SessionData>(sessionKey);
+    let session: SessionData | null;
+    
+    if (redis) {
+      session = await redis.get<SessionData>(sessionKey);
+    } else {
+      // Mock mode: use in-memory storage
+      session = mockSessions.get(sessionKey) || null;
+    }
     
     if (!session) {
       session = {
@@ -95,8 +112,14 @@ export async function POST(request: NextRequest) {
       session.call_id = call_id;
     }
 
-    // Save session with 24 hour expiry
-    await redis.set(sessionKey, session, { ex: 86400 });
+    // Save session
+    if (redis) {
+      await redis.set(sessionKey, session, { ex: 86400 });
+    } else {
+      // Mock mode: save to in-memory storage
+      mockSessions.set(sessionKey, session);
+      console.log('[v0] Mock session saved:', sessionKey, session.answers.length, 'answers');
+    }
 
     return NextResponse.json({
       success: true,
@@ -128,7 +151,14 @@ export async function GET(request: NextRequest) {
 
   try {
     const redis = getRedis();
-    const session = await redis.get<SessionData>(`voice-session:${taskId}`);
+    const sessionKey = `voice-session:${taskId}`;
+    
+    let session: SessionData | null;
+    if (redis) {
+      session = await redis.get<SessionData>(sessionKey);
+    } else {
+      session = mockSessions.get(sessionKey) || null;
+    }
     
     if (!session) {
       return NextResponse.json({ 

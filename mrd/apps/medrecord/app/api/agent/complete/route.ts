@@ -23,26 +23,38 @@ function validateApiKey(request: NextRequest): boolean {
   return authHeader === `Bearer ${apiKey}`;
 }
 
-function getMedplumClient(): MedplumClient {
-  const baseUrl = process.env.MEDPLUM_BASE_URL || 'https://medplumapivercal.healthtalk.ai';
+// In-memory store for mock mode (shared with answer endpoint conceptually)
+const mockSessions = new Map<string, SessionData>();
+
+function isMockMode(): boolean {
   const clientId = process.env.MEDPLUM_CLIENT_ID;
   const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
+  const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  return !clientId || !clientSecret || !redisUrl;
+}
 
+function getMedplumClient(): MedplumClient | null {
+  const clientId = process.env.MEDPLUM_CLIENT_ID;
+  const clientSecret = process.env.MEDPLUM_CLIENT_SECRET;
+  
   if (!clientId || !clientSecret) {
-    throw new Error('Medplum credentials not configured');
+    console.warn('[v0] Running in MOCK MODE - MedPlum credentials not configured');
+    return null;
   }
 
+  const baseUrl = process.env.MEDPLUM_BASE_URL || 'https://medplumapivercal.healthtalk.ai';
   const client = new MedplumClient({ baseUrl });
   client.startClientLogin(clientId, clientSecret);
   return client;
 }
 
-function getRedis(): Redis {
+function getRedis(): Redis | null {
   const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (!url || !token) {
-    throw new Error('Redis not configured');
+    console.warn('[v0] Running in MOCK MODE - Redis not configured');
+    return null;
   }
 
   return new Redis({ url, token });
@@ -77,9 +89,31 @@ export async function POST(request: NextRequest) {
 
     const redis = getRedis();
     const medplum = getMedplumClient();
+    const sessionKey = `voice-session:${task_id}`;
+
+    // Mock mode: return success without saving to MedPlum
+    if (!medplum || !redis) {
+      console.log('[v0] MOCK MODE: Completing questionnaire for task:', task_id);
+      
+      // Try to get mock session
+      const mockSession = mockSessions.get(sessionKey);
+      const answersCount = mockSession?.answers.length || 0;
+      
+      // Clean up mock session
+      mockSessions.delete(sessionKey);
+      
+      return NextResponse.json({
+        success: true,
+        mock_mode: true,
+        task_id,
+        task_status: 'completed',
+        questionnaire_response_id: `mock-response-${Date.now()}`,
+        answers_count: answersCount,
+        message: 'MOCK MODE: Questionnaire marked as completed (not saved to MedPlum)',
+      });
+    }
 
     // Get session with answers
-    const sessionKey = `voice-session:${task_id}`;
     const session = await redis.get<SessionData>(sessionKey);
 
     if (!session || session.answers.length === 0) {
