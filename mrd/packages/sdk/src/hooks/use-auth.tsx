@@ -20,16 +20,17 @@ import {
   getGatewayUrl,
   getTenantId,
   resolveAuthMode,
-  isCrossDomain,
 } from '../auth/config';
 import {
   fetchUser,
   redirectToSignIn as clientRedirectToSignIn,
   signOut as clientSignOut,
   getCachedUser,
+} from '../auth/client';
+import {
   clearAuthStorage,
   getSessionId,
-} from '../auth/client';
+} from '../auth/storage';
 
 // ============================================
 // Context

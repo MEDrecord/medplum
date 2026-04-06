@@ -16,7 +16,7 @@
     "clean": "turbo run clean",
     "dev": "npm run dev --workspace=@mrd/medrecord",
     "dev:medrecord": "npm run dev --workspace=@mrd/medrecord",
-    "dev:healthtalk": "npm run dev --workspace=@mrd/healthtalk",
+    "dev:healthtalk": "npm run dev -w @mrd/healthtalk",
     "dev:coachi": "npm run dev --workspace=@mrd/coachi",
     "lint": "turbo run lint --filter=!@medplum/docs",
     "lint:fix": "turbo run lint:fix --filter=!@medplum/docs",
