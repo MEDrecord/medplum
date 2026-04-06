@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
 import type { Questionnaire, QuestionnaireItem, QuestionnaireResponse as FHIRQuestionnaireResponse } from '@medplum/fhirtypes';
 import { useGateway } from './use-gateway';
-import type { QuestionnaireResponse, QuestionnaireSubmitRequest } from '../client/gateway-client';
+import type { QuestionnaireDetailResponse, QuestionnaireSubmitRequest } from '../client/gateway-client';
 
 /**
  * useQuestionnaire - Fetch questionnaire by ID
@@ -18,7 +18,7 @@ import type { QuestionnaireResponse, QuestionnaireSubmitRequest } from '../clien
 export function useQuestionnaire(id: string | null | undefined) {
   const { client } = useGateway();
 
-  const { data, error, isLoading, mutate } = useSWR<QuestionnaireResponse>(
+  const { data, error, isLoading, mutate } = useSWR<QuestionnaireDetailResponse>(
     id ? ['questionnaire', id] : null,
     () => client.questionnaires.get(id!),
     {
