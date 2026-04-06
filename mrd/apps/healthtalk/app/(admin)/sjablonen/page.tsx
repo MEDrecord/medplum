@@ -1,5 +1,9 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
 import { Header, SearchInput } from '@/components/header';
-import { Plus, Star, FileText, MoreVertical } from 'lucide-react';
+import { Plus, Star, FileText, MoreVertical, ChevronDown, ClipboardList, FileText as FileIcon } from 'lucide-react';
 
 // Mock data - in production this comes from templates API
 const mockTemplates = [
@@ -69,6 +73,7 @@ const mockTemplates = [
 ];
 
 export default function SjablonenPage() {
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
   const favorites = mockTemplates.filter(t => t.isFavorite);
   const allTemplates = mockTemplates.filter(t => !t.isFavorite);
 
@@ -83,10 +88,58 @@ export default function SjablonenPage() {
               Nieuwste eerst
             </button>
             <SearchInput placeholder="Zoek sjabloon..." />
-            <button className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              <Plus className="h-4 w-4" />
-              Sjabloon maken
-            </button>
+            
+            {/* Create Dropdown */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowCreateMenu(!showCreateMenu)}
+                className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4" />
+                Sjabloon maken
+                <ChevronDown className="h-4 w-4" />
+              </button>
+              
+              {showCreateMenu && (
+                <>
+                  {/* Backdrop */}
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setShowCreateMenu(false)} 
+                  />
+                  
+                  {/* Dropdown Menu */}
+                  <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-lg border border-border bg-popover p-2 shadow-lg">
+                    <Link
+                      href="/sjablonen/nieuw"
+                      onClick={() => setShowCreateMenu(false)}
+                      className="flex items-start gap-3 rounded-lg p-3 hover:bg-muted"
+                    >
+                      <FileIcon className="mt-0.5 h-5 w-5 text-primary" />
+                      <div>
+                        <span className="font-medium">Verslag sjabloon</span>
+                        <p className="text-xs text-muted-foreground">
+                          AI genereert verslagen van gesprekken
+                        </p>
+                      </div>
+                    </Link>
+                    <Link
+                      href="/sjablonen/vragenlijst/nieuw"
+                      onClick={() => setShowCreateMenu(false)}
+                      className="flex items-start gap-3 rounded-lg p-3 hover:bg-muted"
+                    >
+                      <ClipboardList className="mt-0.5 h-5 w-5 text-secondary" />
+                      <div>
+                        <span className="font-medium">Vragenlijst</span>
+                        <p className="text-xs text-muted-foreground">
+                          Verzamel antwoorden met optionele scoring
+                        </p>
+                      </div>
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         }
       />
