@@ -14,7 +14,7 @@
     "build:docs": "turbo run build --filter=@medplum/docs",
     "build:fast": "turbo run build --filter=@medplum/app --filter=@medplum/server",
     "clean": "turbo run clean",
-    "dev": "npm run dev --workspace=@mrd/medrecord",
+    "dev": "cd mrd/apps/healthtalk && npx next dev --port 3000",
     "dev:medrecord": "npm run dev --workspace=@mrd/medrecord",
     "dev:healthtalk": "npm run dev -w @mrd/healthtalk",
     "dev:coachi": "npm run dev --workspace=@mrd/coachi",
