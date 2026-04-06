@@ -1,9 +1,13 @@
 {
   "name": "@mrd/sdk",
   "version": "1.0.0",
-  "description": "MEDrecord SDK - Gateway client and React hooks for all brand apps",
+  "description": "MEDrecord SDK - Gateway client, React hooks, and dual-mode auth for all brand apps",
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auth/server": "./src/auth/server-export.ts"
+  },
   "scripts": {
     "build": "tsc",
     "lint": "eslint src/",

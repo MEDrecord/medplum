@@ -1,11 +1,16 @@
 /**
  * GatewayClient - HTTP client for MEDrecord Gateway
  * 
- * The Gateway handles authentication via session cookies.
- * All requests include credentials automatically.
+ * Supports dual-mode authentication:
+ * - Cookie mode: Same-domain authentication via HttpOnly cookie (auth.sid)
+ * - WebToken mode: Cross-domain authentication via X-Session-Id header
  * 
  * @see mrd/.agents/specs/gateway-service.mdx
  */
+
+import type { AuthMode } from '../auth/types';
+import { resolveAuthMode, isCrossDomain } from '../auth/config';
+import { getSessionId } from '../auth/storage';
 
 export type BrandId = 'healthtalk' | 'coachi' | 'medsafe' | 'medrecord';
 
@@ -16,6 +21,10 @@ export interface GatewayClientOptions {
   brand: BrandId;
   /** Default service slug for API calls */
   serviceSlug?: string;
+  /** Authentication mode (auto-detected if not specified) */
+  authMode?: AuthMode;
+  /** Session ID for webToken mode (auto-fetched from storage if not provided) */
+  sessionId?: string;
 }
 
 export class GatewayError extends Error {
@@ -34,11 +43,53 @@ export class GatewayClient {
   private readonly gatewayUrl: string;
   private readonly brand: BrandId;
   private readonly defaultServiceSlug: string;
+  private readonly authMode: 'cookie' | 'webtoken';
+  private sessionId?: string;
 
   constructor(options: GatewayClientOptions) {
     this.gatewayUrl = options.gatewayUrl.replace(/\/$/, ''); // Remove trailing slash
     this.brand = options.brand;
     this.defaultServiceSlug = options.serviceSlug ?? 'templates';
+    this.authMode = resolveAuthMode(options.authMode);
+    this.sessionId = options.sessionId;
+  }
+
+  /**
+   * Set session ID for webToken mode (call after token exchange)
+   */
+  setSessionId(sessionId: string): void {
+    this.sessionId = sessionId;
+  }
+
+  /**
+   * Get current auth mode
+   */
+  getAuthMode(): 'cookie' | 'webtoken' {
+    return this.authMode;
+  }
+
+  /**
+   * Get auth headers based on current mode
+   */
+  private getAuthHeaders(): HeadersInit {
+    const headers: HeadersInit = {};
+    
+    if (this.authMode === 'webtoken') {
+      // WebToken mode: use X-Session-Id header
+      const sessionId = this.sessionId ?? getSessionId();
+      if (sessionId) {
+        headers['X-Session-Id'] = sessionId;
+      }
+    }
+    
+    return headers;
+  }
+
+  /**
+   * Get credentials option based on auth mode
+   */
+  private getCredentials(): RequestCredentials {
+    return this.authMode === 'cookie' ? 'include' : 'omit';
   }
 
   /**
@@ -53,10 +104,11 @@ export class GatewayClient {
 
     const response = await fetch(url, {
       ...init,
-      credentials: 'include', // Include session cookies
+      credentials: this.getCredentials(),
       headers: {
         'Content-Type': 'application/json',
         'X-Brand': this.brand,
+        ...this.getAuthHeaders(),
         ...init?.headers,
       },
     });
@@ -109,9 +161,10 @@ export class GatewayClient {
 
     const response = await fetch(url, {
       ...init,
-      credentials: 'include',
+      credentials: this.getCredentials(),
       headers: {
         'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
         ...init?.headers,
       },
     });
