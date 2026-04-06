@@ -8,7 +8,7 @@
  */
 
 import type { GatewayUser, GatewaySession, SessionVerifyResponse } from './types';
-import { getGatewayUrl, getTenantId, resolveAuthMode } from './config';
+import { getGatewayUrl } from './config';
 
 // Re-export config functions for server use
 export { getGatewayUrl, getTenantId, getAppUrl } from './config';

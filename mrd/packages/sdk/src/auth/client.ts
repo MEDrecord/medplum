@@ -14,7 +14,6 @@ import type {
 } from './types';
 import {
   getGatewayUrl,
-  getTenantId,
   getAppUrl,
   buildSignInUrl,
   buildSignOutUrl,
