@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "npm install",
-  "buildCommand": "npm run build --workspace=@mrd/healthtalk",
-  "devCommand": "npm run dev:healthtalk",
+  "buildCommand": "cd mrd/apps/healthtalk && npm run build",
+  "devCommand": "cd mrd/apps/healthtalk && npx next dev --port 3000",
   "outputDirectory": "mrd/apps/healthtalk/.next"
 }
