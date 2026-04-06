@@ -7,11 +7,12 @@ export function getRedis(): Redis {
     return redisClient;
   }
 
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Support both naming conventions
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (!url || !token) {
-    throw new Error("Missing Upstash Redis configuration");
+    throw new Error("Missing Upstash Redis configuration (KV_REST_API_URL/TOKEN or UPSTASH_REDIS_REST_URL/TOKEN)");
   }
 
   redisClient = new Redis({ url, token });

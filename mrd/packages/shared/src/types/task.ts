@@ -5,7 +5,7 @@
  * Based on FHIR Task resource with HealthTalk extensions.
  */
 
-import type { Task as FHIRTask, Reference } from '@medplum/fhirtypes';
+import type { Task as FHIRTask } from '@medplum/fhirtypes';
 
 // ============================================
 // Delivery Channel Types
