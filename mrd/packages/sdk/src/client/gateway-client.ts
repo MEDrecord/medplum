@@ -253,24 +253,143 @@ export class GatewayClient {
   };
 
   // ============================================
-  // Questionnaires API
+  // Questionnaires API (FHIR Questionnaire CRUD)
   // ============================================
 
   questionnaires = {
     /**
-     * Get questionnaire by ID
+     * List questionnaires with optional filters
      */
-    get: (id: string): Promise<QuestionnaireResponse> => {
-      return this.fetch<QuestionnaireResponse>(`/${id}/`, { serviceSlug: 'questionnaires' });
+    list: (params?: QuestionnaireSearchParams): Promise<QuestionnaireListResponse> => {
+      const query = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.fetch<QuestionnaireListResponse>(`/${query}`, { serviceSlug: 'questionnaires' });
     },
 
     /**
-     * Submit questionnaire response
+     * Get questionnaire by ID
+     */
+    get: (id: string): Promise<QuestionnaireDetailResponse> => {
+      return this.fetch<QuestionnaireDetailResponse>(`/${id}/`, { serviceSlug: 'questionnaires' });
+    },
+
+    /**
+     * Create new questionnaire
+     */
+    create: (data: CreateQuestionnaireRequest): Promise<QuestionnaireDetailResponse> => {
+      return this.fetch<QuestionnaireDetailResponse>('/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * Update questionnaire
+     */
+    update: (id: string, data: UpdateQuestionnaireRequest): Promise<QuestionnaireDetailResponse> => {
+      return this.fetch<QuestionnaireDetailResponse>(`/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * Delete questionnaire (only draft)
+     */
+    delete: (id: string): Promise<void> => {
+      return this.fetch<void>(`/${id}/`, {
+        method: 'DELETE',
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * Publish questionnaire (draft -> active)
+     */
+    publish: (id: string): Promise<QuestionnaireDetailResponse> => {
+      return this.fetch<QuestionnaireDetailResponse>(`/${id}/publish/`, {
+        method: 'POST',
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * Retire questionnaire (active -> retired)
+     */
+    retire: (id: string): Promise<QuestionnaireDetailResponse> => {
+      return this.fetch<QuestionnaireDetailResponse>(`/${id}/retire/`, {
+        method: 'POST',
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * Duplicate questionnaire
+     */
+    duplicate: (id: string): Promise<QuestionnaireDetailResponse> => {
+      return this.fetch<QuestionnaireDetailResponse>(`/${id}/duplicate/`, {
+        method: 'POST',
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * Import questionnaire from LOINC code
+     */
+    importFromLoinc: (loincCode: string): Promise<QuestionnaireDetailResponse> => {
+      return this.fetch<QuestionnaireDetailResponse>('/import/loinc/', {
+        method: 'POST',
+        body: JSON.stringify({ loincCode }),
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * Submit questionnaire response (patient completes form)
      */
     submitResponse: (questionnaireId: string, response: QuestionnaireSubmitRequest): Promise<QuestionnaireSubmitResponse> => {
       return this.fetch<QuestionnaireSubmitResponse>(`/${questionnaireId}/responses/`, {
         method: 'POST',
         body: JSON.stringify(response),
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * Get questionnaire response by ID
+     */
+    getResponse: (questionnaireId: string, responseId: string): Promise<QuestionnaireResponseDetail> => {
+      return this.fetch<QuestionnaireResponseDetail>(`/${questionnaireId}/responses/${responseId}/`, {
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * List responses for a questionnaire
+     */
+    listResponses: (questionnaireId: string, params?: ResponseSearchParams): Promise<QuestionnaireResponseListResponse> => {
+      const query = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+      return this.fetch<QuestionnaireResponseListResponse>(`/${questionnaireId}/responses/${query}`, {
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * Calculate score for a response (server-side calculation)
+     */
+    calculateScore: (questionnaireId: string, responseId: string): Promise<ScoreCalculationResponse> => {
+      return this.fetch<ScoreCalculationResponse>(`/${questionnaireId}/responses/${responseId}/score/`, {
+        method: 'POST',
+        serviceSlug: 'questionnaires',
+      });
+    },
+
+    /**
+     * Get score observation for a response
+     */
+    getScoreObservation: (questionnaireId: string, responseId: string): Promise<ScoreObservationResponse> => {
+      return this.fetch<ScoreObservationResponse>(`/${questionnaireId}/responses/${responseId}/score/`, {
         serviceSlug: 'questionnaires',
       });
     },
@@ -412,19 +531,124 @@ export interface UpdateSectionRequest {
   order?: number;
 }
 
-export interface QuestionnaireResponse {
+// Questionnaire Types
+export interface QuestionnaireSearchParams {
+  status?: 'draft' | 'active' | 'retired';
+  hasScoring?: 'true' | 'false';
+  search?: string;
+  tags?: string;
+  page?: string;
+  limit?: string;
+}
+
+export interface QuestionnaireListResponse {
+  items: QuestionnaireSummaryItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface QuestionnaireSummaryItem {
+  id: string;
+  name: string;
+  title: string;
+  status: 'draft' | 'active' | 'retired';
+  version?: string;
+  date?: string;
+  itemCount: number;
+  hasScoring: boolean;
+  tags?: string[];
+  languages: string[];
+  loincCode?: string;
+}
+
+export interface QuestionnaireDetailResponse {
   id: string;
   questionnaire: import('@medplum/fhirtypes').Questionnaire;
+  scoreConfig?: import('@mrd/shared').ScoreConfiguration;
+  metadata: {
+    createdAt: string;
+    updatedAt: string;
+    createdBy: string;
+    version: string;
+  };
+}
+
+export interface CreateQuestionnaireRequest {
+  name: string;
+  title: string;
+  description?: string;
+  items: import('@mrd/shared').QuestionnaireItemBuilder[];
+  scoreConfig?: import('@mrd/shared').ScoreConfiguration;
+  languages?: string[];
+  tags?: string[];
+  loincCode?: string;
+}
+
+export interface UpdateQuestionnaireRequest {
+  name?: string;
+  title?: string;
+  description?: string;
+  items?: import('@mrd/shared').QuestionnaireItemBuilder[];
+  scoreConfig?: import('@mrd/shared').ScoreConfiguration;
+  languages?: string[];
+  tags?: string[];
 }
 
 export interface QuestionnaireSubmitRequest {
   response: import('@medplum/fhirtypes').QuestionnaireResponse;
+  patientId: string;
 }
 
 export interface QuestionnaireSubmitResponse {
   id: string;
-  score?: number;
-  interpretation?: string;
+  responseId: string;
+  score?: ScoreCalculationResponse;
+}
+
+export interface QuestionnaireResponseDetail {
+  id: string;
+  response: import('@medplum/fhirtypes').QuestionnaireResponse;
+  score?: ScoreCalculationResponse;
+  submittedAt: string;
+  patientId: string;
+}
+
+export interface QuestionnaireResponseListResponse {
+  items: Array<{
+    id: string;
+    patientId: string;
+    patientName: string;
+    submittedAt: string;
+    score?: number;
+    severity?: string;
+  }>;
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ResponseSearchParams {
+  patientId?: string;
+  from?: string;
+  to?: string;
+  page?: string;
+  limit?: string;
+}
+
+export interface ScoreCalculationResponse {
+  totalScore: number;
+  maxScore: number;
+  percentage: number;
+  severity: string;
+  severityLabel: string;
+  color: string;
+  observationId?: string;
+}
+
+export interface ScoreObservationResponse {
+  observation: import('@medplum/fhirtypes').Observation;
+  score: ScoreCalculationResponse;
 }
 
 export interface AppointmentSearchParams {
