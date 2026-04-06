@@ -5,391 +5,546 @@ section: 2
 
 # Gateway Service Specification
 
-The Gateway is the central API service that all brand apps communicate with. It handles authentication, authorization, and proxies requests to MedPlum and other backend services.
+The Gateway is the **existing** central API service at `auth-test-b2c.healthtalk.ai`. All brand apps communicate with backend services through this Gateway. It handles authentication via Azure AD B2C, session management, and proxies requests to backend services with HMAC signatures.
+
+> **Important**: The Gateway already exists and is operational. This document describes how to integrate with it, not how to build it.
 
 ## Service Overview
 
 | Property | Value |
 |----------|-------|
-| Location | `mrd/gateway/` |
-| Framework | Next.js 16 (App Router) |
-| Deployment | Vercel |
-| Domain | `gateway.medrecord.nl` (production) |
+| Base URL | `https://auth-test-b2c.healthtalk.ai` |
+| Auth Provider | Azure AD B2C (OAuth2/OIDC with PKCE) |
+| Session Storage | Redis |
+| Status | Production-ready |
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              GATEWAY SERVICE                                 │
-│                              mrd/gateway/                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  app/api/                                                                   │
-│  ├── auth/                                                                  │
-│  │   ├── login/route.ts           POST   - OAuth login initiation          │
-│  │   ├── callback/route.ts        GET    - OAuth callback                  │
-│  │   ├── logout/route.ts          POST   - Session termination             │
-│  │   ├── session/route.ts         GET    - Current session info            │
-│  │   └── refresh/route.ts         POST   - Token refresh                   │
-│  │                                                                          │
-│  ├── templates/                                                             │
-│  │   ├── route.ts                 GET    - List templates                  │
-│  │   │                            POST   - Create template                 │
-│  │   └── [id]/                                                             │
-│  │       ├── route.ts             GET    - Get template                    │
-│  │       │                        PATCH  - Update template                 │
-│  │       │                        DELETE - Delete template                 │
-│  │       ├── sections/                                                     │
-│  │       │   └── route.ts         GET/POST/PATCH - Section CRUD           │
-│  │       └── publish/                                                      │
-│  │           └── route.ts         POST   - Publish template               │
-│  │                                                                          │
-│  ├── questionnaires/                                                        │
-│  │   ├── route.ts                 GET    - List questionnaires            │
-│  │   │                            POST   - Create questionnaire           │
-│  │   └── [id]/                                                             │
-│  │       ├── route.ts             GET    - Get questionnaire              │
-│  │       │                        PATCH  - Update questionnaire           │
-│  │       └── responses/                                                    │
-│  │           └── route.ts         POST   - Submit response                │
-│  │                                                                          │
-│  ├── appointments/                                                          │
-│  │   └── route.ts                 GET    - List appointments              │
-│  │                                                                          │
-│  ├── patients/                                                              │
-│  │   ├── route.ts                 GET    - List patients                  │
-│  │   └── [id]/                                                             │
-│  │       └── route.ts             GET    - Get patient                    │
-│  │                                                                          │
-│  ├── notify/                                                                │
-│  │   └── route.ts                 POST   - Send notification              │
-│  │                                                                          │
-│  └── ai/                                                                    │
-│      └── generate/                                                          │
-│          └── route.ts             POST   - Generate AI content            │
-│                                                                             │
-│  lib/                                                                       │
-│  ├── medplum.ts                   Server-side MedPlum client               │
-│  ├── auth.ts                      JWT verification, session management     │
-│  ├── ai-client.ts                 GPU API client                           │
-│  └── middleware/                                                            │
-│      ├── auth-middleware.ts       Request authentication                   │
-│      └── tenant-middleware.ts     Multi-tenant context                     │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## Authentication
-
-### OAuth Flow
+## Architecture Overview
 
 ```
-┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│ Brand App│     │ Gateway  │     │ Auth     │     │ MedPlum  │
-│          │     │          │     │ Provider │     │          │
-└────┬─────┘     └────┬─────┘     └────┬─────┘     └────┬─────┘
-     │                │                │                │
-     │ GET /login     │                │                │
-     │───────────────►│                │                │
-     │                │                │                │
-     │ Redirect to    │                │                │
-     │◄───────────────│                │                │
-     │ Auth Provider  │                │                │
-     │                │                │                │
-     │ Login UI       │                │                │
-     │────────────────────────────────►│                │
-     │                │                │                │
-     │ Redirect with  │                │                │
-     │◄────────────────────────────────│                │
-     │ auth code      │                │                │
-     │                │                │                │
-     │ GET /callback  │                │                │
-     │ ?code=xxx      │                │                │
-     │───────────────►│                │                │
-     │                │                │                │
-     │                │ Exchange code  │                │
-     │                │───────────────►│                │
-     │                │                │                │
-     │                │ Access token   │                │
-     │                │◄───────────────│                │
-     │                │                │                │
-     │                │ Get user info  │                │
-     │                │────────────────────────────────►│
-     │                │                │                │
-     │                │ User + tenant  │                │
-     │                │◄────────────────────────────────│
-     │                │                │                │
-     │ Set session    │                │                │
-     │ cookie + redirect               │                │
-     │◄───────────────│                │                │
-     │                │                │                │
+┌──────────────┐     ┌─────────────────────────────────┐     ┌──────────────┐
+│   Frontend   │     │          API Gateway            │     │   Backend    │
+│   (Browser)  │     │  auth-test-b2c.healthtalk.ai   │     │   Service    │
+└──────┬───────┘     └────────────┬────────────────────┘     └──────┬───────┘
+       │                          │                                  │
+       │  1. Sign In              │                                  │
+       ├─────────────────────────>│                                  │
+       │     (Azure B2C)          │                                  │
+       │                          │                                  │
+       │  2. Session Cookie       │                                  │
+       │<─────────────────────────┤                                  │
+       │     (HttpOnly)           │                                  │
+       │                          │                                  │
+       │  3. API Call             │  4. Validate Session             │
+       │     (Cookie only)        │     Get user from Redis          │
+       ├─────────────────────────>│                                  │
+       │  NO API KEY!             │  5. Sign Request (HMAC)          │
+       │                          ├─────────────────────────────────>│
+       │                          │  X-Gateway-Key: gwk_xxx          │
+       │                          │  X-Gateway-Signature: ...        │
+       │                          │  X-User-Id: user123              │
+       │                          │                                  │
+       │                          │  6. Verify Signature      <──────┤
+       │                          │     Process Request              │
+       │                          │                                  │
+       │  7. Response             │  8. Verify Response              │
+       │<─────────────────────────┤<─────────────────────────────────┤
+       │                          │                                  │
 ```
 
-### Request Authentication
+## Key System
 
-Every API request (except auth routes) requires a valid session:
+Four key types are used in the Gateway system:
+
+| Prefix | Name | Purpose | Transmitted |
+|--------|------|---------|-------------|
+| `gwk_` | Gateway Key | Identifies the Gateway to Backend | Yes, in `X-Gateway-Key` header |
+| `ssk_` | Service Secret Key | HMAC signing of requests/responses | **NEVER** (only signatures) |
+| `sak_` | Service API Key | Management and admin operations | Yes, in `X-Api-Key` header |
+| `cak_` | Client API Key | Machine-to-machine authentication | Yes, in `X-Api-Key` header |
+
+> **Frontend apps: NO API KEY needed!** Frontend applications use the session cookie from Azure B2C sign-in.
+
+## Authentication Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/auth/signin` | GET | Redirect to Azure B2C sign-in/sign-up |
+| `/api/auth/signout` | GET | Sign out and clear session |
+| `/api/auth/session` | GET | Get current session (user info) |
+| `/api/auth/forgot-password` | GET | Redirect to password reset flow |
+
+## Gateway Proxy Endpoint
+
+All backend service calls go through:
+
+```
+GET/POST/PUT/PATCH/DELETE /api/gateway/proxy/{service-slug}/{path}
+```
+
+The Gateway:
+1. Validates the session cookie (or Client API Key for M2M)
+2. Signs the request with HMAC using the Service Secret Key
+3. Forwards to the backend service
+4. Verifies the response signature
+5. Returns to the client
+
+---
+
+# Frontend Integration
+
+## Same-Origin Frontend
+
+For frontends hosted on the Gateway domain:
 
 ```typescript
-// lib/middleware/auth-middleware.ts
-import { verifySession } from '../auth';
+// Call Protected API - NO API KEY NEEDED!
+// Session cookie is automatically included
 
-export async function authMiddleware(request: Request): Promise<AuthContext> {
-  const sessionCookie = request.cookies.get('session');
-  
-  if (!sessionCookie) {
-    throw new AuthError('No session', 401);
-  }
-  
-  const session = await verifySession(sessionCookie.value);
-  
-  return {
-    userId: session.userId,
-    tenantId: session.tenantId,
-    brand: session.brand,
-    roles: session.roles,
-  };
-}
-```
-
-### Headers
-
-| Header | Required | Description |
-|--------|----------|-------------|
-| `Cookie: session=xxx` | Yes | Session token (HTTP-only cookie) |
-| `X-Brand` | Yes | Brand identifier (`healthtalk`, `coachi`, etc.) |
-| `X-Tenant-Id` | No | Override tenant (admin only) |
-
-## API Routes
-
-### Templates
-
-#### List Templates
-
-```
-GET /api/templates?type={type}&status={status}&page={page}&limit={limit}
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `type` | `note-template` \| `questionnaire` | Filter by template type |
-| `status` | `draft` \| `published` | Filter by status |
-| `page` | number | Page number (default: 1) |
-| `limit` | number | Items per page (default: 20) |
-
-**Response:**
-
-```typescript
-interface TemplateListResponse {
-  templates: TemplateSummary[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-}
-```
-
-#### Create Template
-
-```
-POST /api/templates
-Content-Type: application/json
-
-{
-  "title": "PHQ-9 Depression Screening",
-  "type": "questionnaire",
-  "language": "nl",
-  "category": "mental-health"
-}
-```
-
-#### Get Template
-
-```
-GET /api/templates/{id}
-```
-
-**Response:**
-
-```typescript
-interface TemplateDetailResponse {
-  id: string;
-  title: string;
-  type: 'note-template' | 'questionnaire';
-  status: 'draft' | 'published';
-  language: string;
-  category: string;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-  
-  // Type-specific content
-  sections?: Section[];           // For note-template
-  questionnaire?: Questionnaire;  // For questionnaire
-  scoringConfig?: ScoringConfig;  // For questionnaire with scoring
-}
-```
-
-### Questionnaires
-
-#### Submit Response
-
-```
-POST /api/questionnaires/{id}/responses
-Content-Type: application/json
-
-{
-  "subject": { "reference": "Patient/123" },
-  "encounter": { "reference": "Encounter/456" },
-  "item": [
-    {
-      "linkId": "phq9-1",
-      "answer": [{ "valueInteger": 2 }]
+async function fetchUsers() {
+  const response = await fetch('/api/gateway/proxy/my-service/users', {
+    credentials: 'include', // Send session cookie
+    headers: {
+      'Content-Type': 'application/json'
     }
-  ]
-}
-```
+  });
 
-This creates a `QuestionnaireResponse` in MedPlum, which triggers:
-1. Scoring Bot (if scoring enabled)
-2. Task status update
-
-### Notifications
-
-#### Send Questionnaire
-
-```
-POST /api/notify
-Content-Type: application/json
-
-{
-  "taskId": "Task/789",
-  "channel": "auto"
-}
-```
-
-| Channel | Description |
-|---------|-------------|
-| `auto` | Gateway selects best channel based on patient contact info |
-| `whatsapp` | WhatsApp interactive |
-| `sms` | SMS with magic link |
-| `email` | Email with magic link |
-| `voice` | Voice agent call |
-
-### AI Generation
-
-#### Generate Report Section
-
-```
-POST /api/ai/generate
-Content-Type: application/json
-
-{
-  "templateId": "Template/123",
-  "sectionId": "subjective",
-  "context": {
-    "transcript": "...",
-    "patientId": "Patient/456"
+  if (!response.ok) {
+    if (response.status === 401) {
+      // Not authenticated - redirect to sign-in
+      window.location.href = '/api/auth/signin?callbackUrl=' + 
+        encodeURIComponent(window.location.href);
+      return;
+    }
+    throw new Error(`HTTP ${response.status}`);
   }
+
+  return response.json();
+}
+
+// POST Example
+async function createUser(userData: unknown) {
+  const response = await fetch('/api/gateway/proxy/my-service/users', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(userData)
+  });
+
+  return response.json();
 }
 ```
 
-This proxies to the own GPU AI service. No AI credentials exist in brand apps.
+## Cross-Origin Frontend (External Apps)
 
-## Server-Side MedPlum Client
+For frontends hosted on different domains (e.g., `mrd/apps/healthtalk/`):
 
 ```typescript
-// lib/medplum.ts
-import { MedplumClient } from '@medplum/core';
+// External Frontend at https://healthtalk.ai
+// Gateway at https://auth-test-b2c.healthtalk.ai
 
-let client: MedplumClient | null = null;
+const GATEWAY_URL = 'https://auth-test-b2c.healthtalk.ai';
 
-export function getMedplumClient(): MedplumClient {
-  if (!client) {
-    client = new MedplumClient({
-      baseUrl: process.env.MEDPLUM_BASE_URL,
-      clientId: process.env.MEDPLUM_CLIENT_ID,
-      clientSecret: process.env.MEDPLUM_CLIENT_SECRET,
-    });
-  }
-  return client;
+// Sign In - redirects user to Gateway → Azure B2C
+function signIn(callbackUrl = window.location.href) {
+  window.location.href = 
+    `${GATEWAY_URL}/api/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`;
 }
 
-// Usage in route handlers
-export async function GET(request: Request) {
-  const auth = await authMiddleware(request);
-  const medplum = getMedplumClient();
+// Sign Out
+function signOut(callbackUrl = window.location.origin) {
+  window.location.href = 
+    `${GATEWAY_URL}/api/auth/signout?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+}
+
+// Password Reset
+function resetPassword(callbackUrl = '/') {
+  window.location.href = 
+    `${GATEWAY_URL}/api/auth/forgot-password?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+}
+
+// Check Session
+async function getSession() {
+  const res = await fetch(`${GATEWAY_URL}/api/auth/session`, {
+    credentials: 'include', // Send cookie cross-origin
+  });
+  return res.json(); // Returns { user: {...} } or { user: null }
+}
+
+// Protect a page
+async function requireAuth() {
+  const { user } = await getSession();
+  if (!user) {
+    signIn(window.location.href);
+    return null;
+  }
+  return user;
+}
+
+// Call Protected API
+async function callApi(serviceSlug: string, endpoint: string, options: RequestInit = {}) {
+  const res = await fetch(
+    `${GATEWAY_URL}/api/gateway/proxy/${serviceSlug}${endpoint}`,
+    {
+      ...options,
+      credentials: 'include', // Session cookie
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    }
+  );
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      signIn(window.location.href);
+      return;
+    }
+    throw new Error(`HTTP ${res.status}`);
+  }
+
+  return res.json();
+}
+
+// Usage
+async function loadUsers() {
+  try {
+    const data = await callApi('my-service', '/users');
+    console.log('Users:', data.users);
+  } catch (error) {
+    console.error('Error:', error);
+  }
+}
+```
+
+---
+
+# Machine-to-Machine Integration
+
+For server-to-server communication (no user session):
+
+## When to Use M2M
+
+- Backend services calling the API (no user session)
+- Scheduled jobs or cron tasks
+- Partner integrations
+- External system integrations
+- Webhooks and callbacks
+
+## Node.js Example
+
+```typescript
+// Server-to-server API call with Client API Key
+
+const GATEWAY_URL = 'https://auth-test-b2c.healthtalk.ai';
+const CLIENT_API_KEY = process.env.CLIENT_API_KEY; // cak_xxx
+
+async function callGatewayApi(
+  serviceSlug: string, 
+  endpoint: string, 
+  options: RequestInit = {}
+) {
+  const url = `${GATEWAY_URL}/api/gateway/proxy/${serviceSlug}${endpoint}`;
   
-  // Set project context for multi-tenant
-  medplum.setProject(auth.tenantId);
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Api-Key': CLIENT_API_KEY, // Required for M2M
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Usage examples
+async function examples() {
+  // GET request
+  const users = await callGatewayApi('my-service', '/users');
   
-  const templates = await medplum.searchResources('PlanDefinition', {
-    _count: 20,
+  // POST request
+  const newUser = await callGatewayApi('my-service', '/users', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: 'John Doe',
+      email: 'john@example.com',
+    }),
   });
   
-  return Response.json({ templates });
+  // PUT request
+  const updated = await callGatewayApi('my-service', '/users/123', {
+    method: 'PUT',
+    body: JSON.stringify({
+      name: 'Jane Doe',
+    }),
+  });
 }
 ```
 
-## Environment Variables
+## Python Example
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `MEDPLUM_BASE_URL` | MedPlum server URL | `https://medplum.medrecord.nl` |
-| `MEDPLUM_CLIENT_ID` | MedPlum OAuth client ID | `gateway-service` |
-| `MEDPLUM_CLIENT_SECRET` | MedPlum OAuth client secret | `***` |
-| `SESSION_SECRET` | JWT signing secret | `***` |
-| `GPU_API_URL` | Own GPU service URL | `https://gpu.medrecord.nl` |
-| `GPU_API_KEY` | GPU service API key | `***` |
-| `TWILIO_ACCOUNT_SID` | Twilio account | `***` |
-| `TWILIO_AUTH_TOKEN` | Twilio auth | `***` |
-| `ELEVENLABS_API_KEY` | ElevenLabs for voice | `***` |
-| `POSTMARK_API_KEY` | Email service | `***` |
+```python
+import requests
+import os
 
-## Implementation Checklist
+GATEWAY_URL = 'https://auth-test-b2c.healthtalk.ai'
+CLIENT_API_KEY = os.environ.get('CLIENT_API_KEY')  # cak_xxx
 
-### Phase 1: Foundation
+def call_gateway_api(service_slug, endpoint, method='GET', data=None):
+    url = f"{GATEWAY_URL}/api/gateway/proxy/{service_slug}{endpoint}"
+    
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Api-Key': CLIENT_API_KEY,  # Required for M2M
+    }
+    
+    response = requests.request(
+        method=method,
+        url=url,
+        headers=headers,
+        json=data
+    )
+    
+    response.raise_for_status()
+    return response.json()
 
-- [ ] Create `mrd/gateway/` Next.js app
-- [ ] Set up environment variables
-- [ ] Implement `lib/medplum.ts` server client
-- [ ] Implement `lib/auth.ts` session management
-- [ ] Create auth middleware
+# Usage
+users = call_gateway_api('my-service', '/users')
+new_user = call_gateway_api(
+    'my-service',
+    '/users',
+    method='POST',
+    data={'name': 'John Doe', 'email': 'john@example.com'}
+)
+```
 
-### Phase 2: Auth Routes
+---
 
-- [ ] `POST /api/auth/login`
-- [ ] `GET /api/auth/callback`
-- [ ] `POST /api/auth/logout`
-- [ ] `GET /api/auth/session`
-- [ ] `POST /api/auth/refresh`
+# Backend Service Integration
 
-### Phase 3: Templates API
+Backend services must validate Gateway requests and sign responses.
 
-- [ ] `GET /api/templates`
-- [ ] `POST /api/templates`
-- [ ] `GET /api/templates/{id}`
-- [ ] `PATCH /api/templates/{id}`
-- [ ] `DELETE /api/templates/{id}`
-- [ ] `POST /api/templates/{id}/sections`
-- [ ] `POST /api/templates/{id}/publish`
+## Environment Setup
 
-### Phase 4: Questionnaires API
+```bash
+# .env file
+GATEWAY_API_KEY=gwk_xxx     # From service registration
+SERVICE_SECRET_KEY=ssk_xxx  # From service registration
+PORT=3001
+```
 
-- [ ] `GET /api/questionnaires`
-- [ ] `POST /api/questionnaires`
-- [ ] `GET /api/questionnaires/{id}`
-- [ ] `POST /api/questionnaires/{id}/responses`
+## Express Middleware (Node.js)
 
-### Phase 5: Notifications & AI
+```typescript
+import crypto from 'crypto';
+import express, { Request, Response, NextFunction } from 'express';
 
-- [ ] `POST /api/notify`
-- [ ] `POST /api/ai/generate`
+const app = express();
+app.use(express.json());
 
-## Related Documents
+const GATEWAY_API_KEY = process.env.GATEWAY_API_KEY;
+const SERVICE_SECRET_KEY = process.env.SERVICE_SECRET_KEY;
+
+// HMAC signature creation
+function createSignature(secretKey: string, payload: string): string {
+  return crypto.createHmac('sha256', secretKey).update(payload).digest('hex');
+}
+
+// Timing-safe comparison
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+// Extend Request type
+interface GatewayRequest extends Request {
+  userId?: string;
+  userEmail?: string;
+  authMethod?: string;
+  gatewayRequestId?: string;
+}
+
+// Validate gateway requests
+function validateGatewayRequest(
+  req: GatewayRequest, 
+  res: Response, 
+  next: NextFunction
+) {
+  // 1. Validate Gateway Key
+  const gatewayKey = req.headers['x-gateway-key'] as string;
+  if (gatewayKey !== GATEWAY_API_KEY) {
+    return res.status(401).json({ error: 'Invalid gateway key' });
+  }
+
+  // 2. Check timestamp (prevent replay attacks)
+  const timestamp = parseInt(req.headers['x-gateway-timestamp'] as string, 10);
+  const now = Date.now();
+  const fiveMinutes = 5 * 60 * 1000;
+  
+  if (isNaN(timestamp) || Math.abs(now - timestamp) > fiveMinutes) {
+    return res.status(401).json({ error: 'Request expired' });
+  }
+
+  // 3. Verify HMAC signature
+  const signature = req.headers['x-gateway-signature'] as string;
+  const requestId = req.headers['x-request-id'] as string;
+  const signedPath = req.headers['x-signed-path'] as string || req.path;
+  
+  // Format: method:path:timestamp:requestId
+  // Body is intentionally excluded to avoid canonicalization issues
+  const payload = `${req.method}:${signedPath}:${timestamp}:${requestId}`;
+  const expectedSignature = createSignature(SERVICE_SECRET_KEY!, payload);
+
+  if (!timingSafeEqual(signature, expectedSignature)) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+
+  // 4. Extract user context
+  req.userId = req.headers['x-user-id'] as string;
+  req.userEmail = req.headers['x-user-email'] as string;
+  req.authMethod = req.headers['x-auth-method'] as string;
+  req.gatewayRequestId = req.headers['x-request-id'] as string;
+
+  next();
+}
+
+// Sign responses
+function signResponse(req: GatewayRequest, res: Response, next: NextFunction) {
+  const originalJson = res.json.bind(res);
+  
+  res.json = (body: unknown) => {
+    const timestamp = Date.now();
+    const bodyHash = crypto.createHash('sha256')
+      .update(JSON.stringify(body))
+      .digest('hex');
+    
+    const payload = `${req.gatewayRequestId}:${res.statusCode}:${timestamp}:${bodyHash}`;
+    const signature = createSignature(SERVICE_SECRET_KEY!, payload);
+
+    res.set('X-Response-Signature', signature);
+    res.set('X-Response-Timestamp', timestamp.toString());
+
+    return originalJson(body);
+  };
+
+  next();
+}
+
+// Apply middleware
+app.use(validateGatewayRequest);
+app.use(signResponse);
+
+// Protected route
+app.get('/users', (req: GatewayRequest, res: Response) => {
+  console.log(`Request from user: ${req.userId} via ${req.authMethod}`);
+  
+  res.json({
+    users: [
+      { id: '1', name: 'Alice' },
+      { id: '2', name: 'Bob' }
+    ]
+  });
+});
+
+app.listen(3001, () => console.log('Backend listening on port 3001'));
+```
+
+---
+
+# API Reference
+
+## Rate Limits
+
+| Tier | Limit | Window |
+|------|-------|--------|
+| Standard | 100 requests | 1 minute |
+| Strict | 10 requests | 1 minute |
+| Generous | 1000 requests | 1 minute |
+
+## HTTP Status Codes
+
+| Code | Meaning |
+|------|---------|
+| 200 | Success |
+| 400 | Bad Request - Invalid parameters |
+| 401 | Unauthorized - Missing or invalid authentication |
+| 403 | Forbidden - Valid auth but insufficient permissions |
+| 404 | Not Found - Service or endpoint not found |
+| 429 | Too Many Requests - Rate limit exceeded |
+| 500 | Internal Server Error |
+| 502 | Bad Gateway - Backend service error |
+| 503 | Service Unavailable - Backend temporarily down |
+| 504 | Gateway Timeout - Backend did not respond |
+
+## Error Response Format
+
+```json
+{
+  "error": "Error Type",
+  "message": "Detailed error message",
+  "requestId": "uuid-here",
+  "retryAfter": 60
+}
+```
+
+---
+
+# Implementation in MedPlum Repo
+
+## What DevOps Needs To Do
+
+The Gateway already exists. The DevOps engineer needs to:
+
+### 1. Register Backend Services
+
+Register the MedPlum-based services with the Gateway:
+
+| Service | Slug | Description |
+|---------|------|-------------|
+| Template Service | `templates` | Template CRUD, sections |
+| Questionnaire Service | `questionnaires` | Questionnaire management |
+| Patient Service | `patients` | Patient data |
+| Appointment Service | `appointments` | Appointment management |
+| Notification Service | `notifications` | Send questionnaires |
+
+### 2. Implement Backend Validation Middleware
+
+Each MedPlum service needs the HMAC validation middleware (see Backend Service Integration above).
+
+### 3. Configure CORS
+
+Ensure the Gateway allows cross-origin requests from brand app domains:
+
+- `https://healthtalk.ai`
+- `https://coachi.ai`
+- `https://medsafe.ai`
+- `https://medrecord.nl`
+
+### 4. Set Up Environment Variables
+
+In the MedPlum deployment:
+
+```bash
+# Gateway integration
+GATEWAY_API_KEY=gwk_xxx
+SERVICE_SECRET_KEY=ssk_xxx
+
+# For M2M calls from MedPlum to Gateway (if needed)
+CLIENT_API_KEY=cak_xxx
+```
+
+---
+
+# Related Documents
 
 | Document | Description |
 |----------|-------------|
+| [sdk-specification.mdx](./sdk-specification.mdx) | SDK that wraps Gateway calls |
 | [platform-architecture.mdx](./platform-architecture.mdx) | Overall architecture |
-| [sdk-specification.mdx](./sdk-specification.mdx) | SDK that consumes this Gateway |
+| [multi-brand.mdx](../standards/multi-brand.mdx) | Brand configuration |

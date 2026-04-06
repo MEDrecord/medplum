@@ -31,8 +31,8 @@ The MEDrecord platform is a multi-brand healthcare application ecosystem built o
                                         │ HTTPS
                                         ▼
 ┌───────────────────────────────────────────────────────────────────────────┐
-│                           GATEWAY SERVICE                                  │
-│                           mrd/gateway/                                     │
+│                           GATEWAY SERVICE (EXISTING)                       │
+│                      auth-test-b2c.healthtalk.ai                          │
 │                                                                           │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐      │
 │  │ /api/auth   │  │ /api/       │  │ /api/       │  │ /api/notify │      │
@@ -135,14 +135,15 @@ Sensitive operations and credentials exist only in the Gateway:
    await client.templates.create({ title, type: 'note-template' });
 
 3. GatewayClient:
-   POST https://gateway.healthtalk.ai/api/templates
-   Headers: Authorization: Bearer {token}, X-Brand: healthtalk
+   POST https://auth-test-b2c.healthtalk.ai/api/gateway/proxy/templates/
+   Headers: Cookie (session), X-Brand: healthtalk
+   (credentials: 'include' - no API key needed)
 
-4. Gateway API Route:
-   - Verifies JWT token
-   - Extracts tenant from token
-   - Calls MedPlum with server credentials
-   - Returns created template
+4. Gateway:
+   - Validates session cookie (from Redis)
+   - Signs request with HMAC (X-Gateway-Signature)
+   - Forwards to backend service with user context
+   - Backend validates signature, processes request
 
 5. MedPlum:
    - Creates PlanDefinition resource

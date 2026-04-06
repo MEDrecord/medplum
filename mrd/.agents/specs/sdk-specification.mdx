@@ -21,24 +21,20 @@ pnpm add @mrd/sdk @mrd/shared
 import { GatewayClient } from '@mrd/sdk';
 
 const client = new GatewayClient({
-  gatewayUrl: 'https://gateway.medrecord.nl',
+  gatewayUrl: 'https://auth-test-b2c.healthtalk.ai',
   brand: 'healthtalk',
-  tenantId: 'tenant-123',
-  getAccessToken: async () => {
-    // Return current session token
-    return getSessionToken();
-  },
 });
 ```
+
+> **Note**: The SDK uses session cookies for authentication - no API keys or tokens needed in frontend apps. Just ensure `credentials: 'include'` is set (handled automatically by the SDK).
 
 ### Configuration Options
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `gatewayUrl` | `string` | Yes | Gateway service URL |
+| `gatewayUrl` | `string` | Yes | Gateway URL (`https://auth-test-b2c.healthtalk.ai`) |
 | `brand` | `BrandId` | Yes | Brand identifier |
-| `tenantId` | `string` | No | Tenant ID (from session) |
-| `getAccessToken` | `() => Promise<string>` | Yes | Token provider function |
+| `serviceSlug` | `string` | No | Default service slug for API calls |
 
 ### API Methods
 
@@ -177,15 +173,14 @@ export default function RootLayout({ children }) {
     <GatewayProvider
       gatewayUrl={process.env.NEXT_PUBLIC_GATEWAY_URL!}
       brand="healthtalk"
-      tenantId={session.tenantId}
-      userId={session.userId}
-      getAccessToken={() => getSessionToken()}
     >
       {children}
     </GatewayProvider>
   );
 }
 ```
+
+> **Note**: User session is managed via HTTP-only cookies by the Gateway. The SDK automatically includes credentials in all requests.
 
 ### useGateway
 
