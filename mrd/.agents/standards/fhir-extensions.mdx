@@ -1,0 +1,311 @@
+---
+title: FHIR Extensions Standard
+---
+
+# FHIR Extensions Standard
+
+MEDrecord-specific FHIR extensions for healthcare applications.
+
+## Extension URLs
+
+All MEDrecord extensions use the base URL:
+
+```
+https://medrecord.nl/fhir/StructureDefinition/
+```
+
+## Patient Language Extensions
+
+### Patient Question Text
+
+Patient-friendly question text in multiple languages.
+
+**URL:** `https://medrecord.nl/fhir/StructureDefinition/patient-question`
+
+```json
+{
+  "url": "https://medrecord.nl/fhir/StructureDefinition/patient-question",
+  "extension": [
+    {
+      "url": "language",
+      "valueCode": "nl"
+    },
+    {
+      "url": "text",
+      "valueString": "Heeft u de afgelopen twee weken weinig interesse of plezier gehad in dingen die u normaal leuk vindt?"
+    }
+  ]
+}
+```
+
+### Patient Answer Text
+
+Patient-friendly answer option text.
+
+**URL:** `https://medrecord.nl/fhir/StructureDefinition/patient-answer`
+
+```json
+{
+  "url": "https://medrecord.nl/fhir/StructureDefinition/patient-answer",
+  "extension": [
+    {
+      "url": "language",
+      "valueCode": "nl"
+    },
+    {
+      "url": "text",
+      "valueString": "Helemaal niet"
+    }
+  ]
+}
+```
+
+### Full Example: QuestionnaireItem
+
+```json
+{
+  "linkId": "phq9-1",
+  "text": "Little interest or pleasure in doing things",
+  "type": "choice",
+  "required": true,
+  "extension": [
+    {
+      "url": "https://medrecord.nl/fhir/StructureDefinition/patient-question",
+      "extension": [
+        { "url": "language", "valueCode": "nl" },
+        { "url": "text", "valueString": "Heeft u de afgelopen twee weken weinig interesse of plezier gehad in dingen die u normaal leuk vindt?" }
+      ]
+    },
+    {
+      "url": "https://medrecord.nl/fhir/StructureDefinition/patient-question",
+      "extension": [
+        { "url": "language", "valueCode": "en" },
+        { "url": "text", "valueString": "Over the past two weeks, have you had little interest or pleasure in doing things you normally enjoy?" }
+      ]
+    }
+  ],
+  "answerOption": [
+    {
+      "valueCoding": {
+        "system": "http://loinc.org",
+        "code": "LA6568-5",
+        "display": "Not at all"
+      },
+      "extension": [
+        {
+          "url": "https://medrecord.nl/fhir/StructureDefinition/patient-answer",
+          "extension": [
+            { "url": "language", "valueCode": "nl" },
+            { "url": "text", "valueString": "Helemaal niet" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Scoring Extensions
+
+### Scoring Configuration
+
+Defines scoring behavior for a Questionnaire.
+
+**URL:** `https://medrecord.nl/fhir/StructureDefinition/scoring-config`
+
+```json
+{
+  "url": "https://medrecord.nl/fhir/StructureDefinition/scoring-config",
+  "extension": [
+    {
+      "url": "enabled",
+      "valueBoolean": true
+    },
+    {
+      "url": "method",
+      "valueCode": "sum"
+    },
+    {
+      "url": "scoredItems",
+      "valueString": "phq9-1,phq9-2,phq9-3,phq9-4,phq9-5,phq9-6,phq9-7,phq9-8,phq9-9"
+    },
+    {
+      "url": "maxScore",
+      "valueInteger": 27
+    }
+  ]
+}
+```
+
+### Scoring Ranges
+
+Interpretation bands for scores.
+
+**URL:** `https://medrecord.nl/fhir/StructureDefinition/scoring-range`
+
+```json
+{
+  "url": "https://medrecord.nl/fhir/StructureDefinition/scoring-range",
+  "extension": [
+    { "url": "min", "valueInteger": 0 },
+    { "url": "max", "valueInteger": 4 },
+    { "url": "label", "valueString": "Minimal depression" },
+    { "url": "severity", "valueCode": "minimal" },
+    { "url": "color", "valueString": "#22C55E" }
+  ]
+}
+```
+
+### Full Example: Questionnaire with Scoring
+
+```json
+{
+  "resourceType": "Questionnaire",
+  "id": "phq9",
+  "title": "PHQ-9",
+  "status": "active",
+  "extension": [
+    {
+      "url": "https://medrecord.nl/fhir/StructureDefinition/scoring-config",
+      "extension": [
+        { "url": "enabled", "valueBoolean": true },
+        { "url": "method", "valueCode": "sum" },
+        { "url": "scoredItems", "valueString": "phq9-1,phq9-2,phq9-3,phq9-4,phq9-5,phq9-6,phq9-7,phq9-8,phq9-9" },
+        { "url": "maxScore", "valueInteger": 27 }
+      ]
+    },
+    {
+      "url": "https://medrecord.nl/fhir/StructureDefinition/scoring-range",
+      "extension": [
+        { "url": "min", "valueInteger": 0 },
+        { "url": "max", "valueInteger": 4 },
+        { "url": "label", "valueString": "Minimal depression" },
+        { "url": "severity", "valueCode": "minimal" },
+        { "url": "color", "valueString": "#22C55E" }
+      ]
+    },
+    {
+      "url": "https://medrecord.nl/fhir/StructureDefinition/scoring-range",
+      "extension": [
+        { "url": "min", "valueInteger": 5 },
+        { "url": "max", "valueInteger": 9 },
+        { "url": "label", "valueString": "Mild depression" },
+        { "url": "severity", "valueCode": "mild" },
+        { "url": "color", "valueString": "#EAB308" }
+      ]
+    },
+    {
+      "url": "https://medrecord.nl/fhir/StructureDefinition/scoring-range",
+      "extension": [
+        { "url": "min", "valueInteger": 10 },
+        { "url": "max", "valueInteger": 14 },
+        { "url": "label", "valueString": "Moderate depression" },
+        { "url": "severity", "valueCode": "moderate" },
+        { "url": "color", "valueString": "#F97316" }
+      ]
+    },
+    {
+      "url": "https://medrecord.nl/fhir/StructureDefinition/scoring-range",
+      "extension": [
+        { "url": "min", "valueInteger": 15 },
+        { "url": "max", "valueInteger": 27 },
+        { "url": "label", "valueString": "Severe depression" },
+        { "url": "severity", "valueCode": "severe" },
+        { "url": "color", "valueString": "#DC2626" }
+      ]
+    }
+  ],
+  "item": [...]
+}
+```
+
+## Helper Functions
+
+### Get Patient Text
+
+```typescript
+// @mrd/sdk/src/utils/patient-language.ts
+import type { QuestionnaireItem } from '@medplum/fhirtypes';
+
+const PATIENT_QUESTION_URL = 'https://medrecord.nl/fhir/StructureDefinition/patient-question';
+
+export function getPatientText(
+  item: QuestionnaireItem, 
+  language: string
+): string {
+  const extension = item.extension?.find(ext => 
+    ext.url === PATIENT_QUESTION_URL &&
+    ext.extension?.find(e => e.url === 'language')?.valueCode === language
+  );
+  
+  return extension?.extension?.find(e => e.url === 'text')?.valueString 
+    ?? item.text 
+    ?? '';
+}
+```
+
+### Get Scoring Config
+
+```typescript
+// @mrd/sdk/src/utils/scoring.ts
+import type { Questionnaire } from '@medplum/fhirtypes';
+
+const SCORING_CONFIG_URL = 'https://medrecord.nl/fhir/StructureDefinition/scoring-config';
+const SCORING_RANGE_URL = 'https://medrecord.nl/fhir/StructureDefinition/scoring-range';
+
+export interface ScoringConfig {
+  enabled: boolean;
+  method: 'sum' | 'average' | 'weighted';
+  scoredItems: string[];
+  maxScore: number;
+}
+
+export interface ScoringRange {
+  min: number;
+  max: number;
+  label: string;
+  severity: 'minimal' | 'mild' | 'moderate' | 'severe';
+  color: string;
+}
+
+export function getScoringConfig(questionnaire: Questionnaire): ScoringConfig | null {
+  const ext = questionnaire.extension?.find(e => e.url === SCORING_CONFIG_URL);
+  if (!ext || !ext.extension) return null;
+
+  const getValue = (url: string) => 
+    ext.extension?.find(e => e.url === url);
+
+  return {
+    enabled: getValue('enabled')?.valueBoolean ?? false,
+    method: (getValue('method')?.valueCode as ScoringConfig['method']) ?? 'sum',
+    scoredItems: getValue('scoredItems')?.valueString?.split(',') ?? [],
+    maxScore: getValue('maxScore')?.valueInteger ?? 0,
+  };
+}
+
+export function getScoringRanges(questionnaire: Questionnaire): ScoringRange[] {
+  return (questionnaire.extension ?? [])
+    .filter(ext => ext.url === SCORING_RANGE_URL)
+    .map(ext => {
+      const getValue = (url: string) => 
+        ext.extension?.find(e => e.url === url);
+
+      return {
+        min: getValue('min')?.valueInteger ?? 0,
+        max: getValue('max')?.valueInteger ?? 0,
+        label: getValue('label')?.valueString ?? '',
+        severity: (getValue('severity')?.valueCode as ScoringRange['severity']) ?? 'minimal',
+        color: getValue('color')?.valueString ?? '#888888',
+      };
+    })
+    .sort((a, b) => a.min - b.min);
+}
+```
+
+## Validation Rules
+
+1. **Patient text required for publish:** A Questionnaire cannot be published without patient-question text for at least the default language (nl).
+
+2. **Scoring items must exist:** All items referenced in `scoredItems` must exist in the Questionnaire.
+
+3. **Scoring ranges must be continuous:** Range boundaries must not overlap and must cover 0 to maxScore.

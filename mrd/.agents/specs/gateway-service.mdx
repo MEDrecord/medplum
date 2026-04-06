@@ -1,0 +1,395 @@
+---
+title: Gateway Service
+section: 2
+---
+
+# Gateway Service Specification
+
+The Gateway is the central API service that all brand apps communicate with. It handles authentication, authorization, and proxies requests to MedPlum and other backend services.
+
+## Service Overview
+
+| Property | Value |
+|----------|-------|
+| Location | `mrd/gateway/` |
+| Framework | Next.js 16 (App Router) |
+| Deployment | Vercel |
+| Domain | `gateway.medrecord.nl` (production) |
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              GATEWAY SERVICE                                 │
+│                              mrd/gateway/                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  app/api/                                                                   │
+│  ├── auth/                                                                  │
+│  │   ├── login/route.ts           POST   - OAuth login initiation          │
+│  │   ├── callback/route.ts        GET    - OAuth callback                  │
+│  │   ├── logout/route.ts          POST   - Session termination             │
+│  │   ├── session/route.ts         GET    - Current session info            │
+│  │   └── refresh/route.ts         POST   - Token refresh                   │
+│  │                                                                          │
+│  ├── templates/                                                             │
+│  │   ├── route.ts                 GET    - List templates                  │
+│  │   │                            POST   - Create template                 │
+│  │   └── [id]/                                                             │
+│  │       ├── route.ts             GET    - Get template                    │
+│  │       │                        PATCH  - Update template                 │
+│  │       │                        DELETE - Delete template                 │
+│  │       ├── sections/                                                     │
+│  │       │   └── route.ts         GET/POST/PATCH - Section CRUD           │
+│  │       └── publish/                                                      │
+│  │           └── route.ts         POST   - Publish template               │
+│  │                                                                          │
+│  ├── questionnaires/                                                        │
+│  │   ├── route.ts                 GET    - List questionnaires            │
+│  │   │                            POST   - Create questionnaire           │
+│  │   └── [id]/                                                             │
+│  │       ├── route.ts             GET    - Get questionnaire              │
+│  │       │                        PATCH  - Update questionnaire           │
+│  │       └── responses/                                                    │
+│  │           └── route.ts         POST   - Submit response                │
+│  │                                                                          │
+│  ├── appointments/                                                          │
+│  │   └── route.ts                 GET    - List appointments              │
+│  │                                                                          │
+│  ├── patients/                                                              │
+│  │   ├── route.ts                 GET    - List patients                  │
+│  │   └── [id]/                                                             │
+│  │       └── route.ts             GET    - Get patient                    │
+│  │                                                                          │
+│  ├── notify/                                                                │
+│  │   └── route.ts                 POST   - Send notification              │
+│  │                                                                          │
+│  └── ai/                                                                    │
+│      └── generate/                                                          │
+│          └── route.ts             POST   - Generate AI content            │
+│                                                                             │
+│  lib/                                                                       │
+│  ├── medplum.ts                   Server-side MedPlum client               │
+│  ├── auth.ts                      JWT verification, session management     │
+│  ├── ai-client.ts                 GPU API client                           │
+│  └── middleware/                                                            │
+│      ├── auth-middleware.ts       Request authentication                   │
+│      └── tenant-middleware.ts     Multi-tenant context                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Authentication
+
+### OAuth Flow
+
+```
+┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
+│ Brand App│     │ Gateway  │     │ Auth     │     │ MedPlum  │
+│          │     │          │     │ Provider │     │          │
+└────┬─────┘     └────┬─────┘     └────┬─────┘     └────┬─────┘
+     │                │                │                │
+     │ GET /login     │                │                │
+     │───────────────►│                │                │
+     │                │                │                │
+     │ Redirect to    │                │                │
+     │◄───────────────│                │                │
+     │ Auth Provider  │                │                │
+     │                │                │                │
+     │ Login UI       │                │                │
+     │────────────────────────────────►│                │
+     │                │                │                │
+     │ Redirect with  │                │                │
+     │◄────────────────────────────────│                │
+     │ auth code      │                │                │
+     │                │                │                │
+     │ GET /callback  │                │                │
+     │ ?code=xxx      │                │                │
+     │───────────────►│                │                │
+     │                │                │                │
+     │                │ Exchange code  │                │
+     │                │───────────────►│                │
+     │                │                │                │
+     │                │ Access token   │                │
+     │                │◄───────────────│                │
+     │                │                │                │
+     │                │ Get user info  │                │
+     │                │────────────────────────────────►│
+     │                │                │                │
+     │                │ User + tenant  │                │
+     │                │◄────────────────────────────────│
+     │                │                │                │
+     │ Set session    │                │                │
+     │ cookie + redirect               │                │
+     │◄───────────────│                │                │
+     │                │                │                │
+```
+
+### Request Authentication
+
+Every API request (except auth routes) requires a valid session:
+
+```typescript
+// lib/middleware/auth-middleware.ts
+import { verifySession } from '../auth';
+
+export async function authMiddleware(request: Request): Promise<AuthContext> {
+  const sessionCookie = request.cookies.get('session');
+  
+  if (!sessionCookie) {
+    throw new AuthError('No session', 401);
+  }
+  
+  const session = await verifySession(sessionCookie.value);
+  
+  return {
+    userId: session.userId,
+    tenantId: session.tenantId,
+    brand: session.brand,
+    roles: session.roles,
+  };
+}
+```
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Cookie: session=xxx` | Yes | Session token (HTTP-only cookie) |
+| `X-Brand` | Yes | Brand identifier (`healthtalk`, `coachi`, etc.) |
+| `X-Tenant-Id` | No | Override tenant (admin only) |
+
+## API Routes
+
+### Templates
+
+#### List Templates
+
+```
+GET /api/templates?type={type}&status={status}&page={page}&limit={limit}
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `type` | `note-template` \| `questionnaire` | Filter by template type |
+| `status` | `draft` \| `published` | Filter by status |
+| `page` | number | Page number (default: 1) |
+| `limit` | number | Items per page (default: 20) |
+
+**Response:**
+
+```typescript
+interface TemplateListResponse {
+  templates: TemplateSummary[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+```
+
+#### Create Template
+
+```
+POST /api/templates
+Content-Type: application/json
+
+{
+  "title": "PHQ-9 Depression Screening",
+  "type": "questionnaire",
+  "language": "nl",
+  "category": "mental-health"
+}
+```
+
+#### Get Template
+
+```
+GET /api/templates/{id}
+```
+
+**Response:**
+
+```typescript
+interface TemplateDetailResponse {
+  id: string;
+  title: string;
+  type: 'note-template' | 'questionnaire';
+  status: 'draft' | 'published';
+  language: string;
+  category: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Type-specific content
+  sections?: Section[];           // For note-template
+  questionnaire?: Questionnaire;  // For questionnaire
+  scoringConfig?: ScoringConfig;  // For questionnaire with scoring
+}
+```
+
+### Questionnaires
+
+#### Submit Response
+
+```
+POST /api/questionnaires/{id}/responses
+Content-Type: application/json
+
+{
+  "subject": { "reference": "Patient/123" },
+  "encounter": { "reference": "Encounter/456" },
+  "item": [
+    {
+      "linkId": "phq9-1",
+      "answer": [{ "valueInteger": 2 }]
+    }
+  ]
+}
+```
+
+This creates a `QuestionnaireResponse` in MedPlum, which triggers:
+1. Scoring Bot (if scoring enabled)
+2. Task status update
+
+### Notifications
+
+#### Send Questionnaire
+
+```
+POST /api/notify
+Content-Type: application/json
+
+{
+  "taskId": "Task/789",
+  "channel": "auto"
+}
+```
+
+| Channel | Description |
+|---------|-------------|
+| `auto` | Gateway selects best channel based on patient contact info |
+| `whatsapp` | WhatsApp interactive |
+| `sms` | SMS with magic link |
+| `email` | Email with magic link |
+| `voice` | Voice agent call |
+
+### AI Generation
+
+#### Generate Report Section
+
+```
+POST /api/ai/generate
+Content-Type: application/json
+
+{
+  "templateId": "Template/123",
+  "sectionId": "subjective",
+  "context": {
+    "transcript": "...",
+    "patientId": "Patient/456"
+  }
+}
+```
+
+This proxies to the own GPU AI service. No AI credentials exist in brand apps.
+
+## Server-Side MedPlum Client
+
+```typescript
+// lib/medplum.ts
+import { MedplumClient } from '@medplum/core';
+
+let client: MedplumClient | null = null;
+
+export function getMedplumClient(): MedplumClient {
+  if (!client) {
+    client = new MedplumClient({
+      baseUrl: process.env.MEDPLUM_BASE_URL,
+      clientId: process.env.MEDPLUM_CLIENT_ID,
+      clientSecret: process.env.MEDPLUM_CLIENT_SECRET,
+    });
+  }
+  return client;
+}
+
+// Usage in route handlers
+export async function GET(request: Request) {
+  const auth = await authMiddleware(request);
+  const medplum = getMedplumClient();
+  
+  // Set project context for multi-tenant
+  medplum.setProject(auth.tenantId);
+  
+  const templates = await medplum.searchResources('PlanDefinition', {
+    _count: 20,
+  });
+  
+  return Response.json({ templates });
+}
+```
+
+## Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `MEDPLUM_BASE_URL` | MedPlum server URL | `https://medplum.medrecord.nl` |
+| `MEDPLUM_CLIENT_ID` | MedPlum OAuth client ID | `gateway-service` |
+| `MEDPLUM_CLIENT_SECRET` | MedPlum OAuth client secret | `***` |
+| `SESSION_SECRET` | JWT signing secret | `***` |
+| `GPU_API_URL` | Own GPU service URL | `https://gpu.medrecord.nl` |
+| `GPU_API_KEY` | GPU service API key | `***` |
+| `TWILIO_ACCOUNT_SID` | Twilio account | `***` |
+| `TWILIO_AUTH_TOKEN` | Twilio auth | `***` |
+| `ELEVENLABS_API_KEY` | ElevenLabs for voice | `***` |
+| `POSTMARK_API_KEY` | Email service | `***` |
+
+## Implementation Checklist
+
+### Phase 1: Foundation
+
+- [ ] Create `mrd/gateway/` Next.js app
+- [ ] Set up environment variables
+- [ ] Implement `lib/medplum.ts` server client
+- [ ] Implement `lib/auth.ts` session management
+- [ ] Create auth middleware
+
+### Phase 2: Auth Routes
+
+- [ ] `POST /api/auth/login`
+- [ ] `GET /api/auth/callback`
+- [ ] `POST /api/auth/logout`
+- [ ] `GET /api/auth/session`
+- [ ] `POST /api/auth/refresh`
+
+### Phase 3: Templates API
+
+- [ ] `GET /api/templates`
+- [ ] `POST /api/templates`
+- [ ] `GET /api/templates/{id}`
+- [ ] `PATCH /api/templates/{id}`
+- [ ] `DELETE /api/templates/{id}`
+- [ ] `POST /api/templates/{id}/sections`
+- [ ] `POST /api/templates/{id}/publish`
+
+### Phase 4: Questionnaires API
+
+- [ ] `GET /api/questionnaires`
+- [ ] `POST /api/questionnaires`
+- [ ] `GET /api/questionnaires/{id}`
+- [ ] `POST /api/questionnaires/{id}/responses`
+
+### Phase 5: Notifications & AI
+
+- [ ] `POST /api/notify`
+- [ ] `POST /api/ai/generate`
+
+## Related Documents
+
+| Document | Description |
+|----------|-------------|
+| [platform-architecture.mdx](./platform-architecture.mdx) | Overall architecture |
+| [sdk-specification.mdx](./sdk-specification.mdx) | SDK that consumes this Gateway |

@@ -19,10 +19,6 @@ specs:
   - specs/brand-style-guide.mdx      # HealthTalk visual identity
   - specs/notification-gateway.mdx   # Notification channels (WhatsApp, SMS, Email, Voice, Teams)
 
-# Compliance - Security and regulatory requirements
-compliance:
-  - compliance/security.mdx          # Security rules and GDPR/AVG
-
 # Instincts - Coding guidelines and patterns
 instincts:
   - instincts/coding.mdx             # Coding best practices
@@ -37,9 +33,10 @@ skills:
 
 # Brand-specific overrides
 overrides:
-  compliance: []
   instincts: []
+  patterns: []
   skills: []
+  specs: []
   standards: []
 
 # Brand-specific additions
