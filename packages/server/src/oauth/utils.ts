@@ -46,6 +46,7 @@ import type { MedplumExternalAuthConfig } from '../config/types';
 import { getAccessPolicyForLogin, getRepoForLogin } from '../fhir/accesspolicy';
 import type { Repository, SystemRepository } from '../fhir/repo';
 import { getGlobalSystemRepo, getProjectSystemRepo } from '../fhir/repo';
+
 import type { SmartScope } from '../fhir/smart';
 import { parseSmartScopes } from '../fhir/smart';
 import { getLogger } from '../logger';
@@ -60,6 +61,7 @@ import {
 import { getStandardClientById } from './clients';
 import type { MedplumAccessTokenClaims } from './keys';
 import { generateAccessToken, generateIdToken, generateRefreshToken, generateSecret, verifyJwt } from './keys';
+import type { GatewayHeaders } from './gateway';
 import type { AuthenticationResult, AuthState } from './middleware';
 import { isExtendedMode } from './middleware';
 
@@ -1265,4 +1267,128 @@ export function hashCode(code: string): string {
     .replaceAll('+', '-')
     .replaceAll('/', '_')
     .replaceAll('=', '');
+}
+
+/**
+ * Authenticates a request from the HealthTalk Gateway using validated HMAC headers.
+ * Finds or creates a User and ProjectMembership based on Gateway user info.
+ *
+ * Backward compatible: this is only called when gatewayEnabled=true AND
+ * the request has valid Gateway headers (key + HMAC signature + timestamp).
+ * Standard Bearer/Basic auth is always tried first.
+ *
+ * @param req - The incoming HTTP request.
+ * @param headers - The validated Gateway headers.
+ * @returns The authentication result if successful; otherwise, undefined.
+ */
+export async function getLoginForGatewayAuth(
+  req: Request,
+  headers: GatewayHeaders
+): Promise<AuthenticationResult | undefined> {
+  const config = getConfig();
+  const projectId = config.defaultProjectId;
+  if (!projectId) {
+    getLogger().warn('Gateway auth: defaultProjectId not configured');
+    return undefined;
+  }
+
+  if (!headers.userId || !headers.userEmail) {
+    getLogger().warn('Gateway auth: missing userId or userEmail in headers');
+    return undefined;
+  }
+
+  const globalSystemRepo = getGlobalSystemRepo();
+
+  // 1. Try to find existing user by Gateway external ID within the project
+  let user = await getUserByExternalId(globalSystemRepo, headers.userId, projectId);
+
+  // 2. Fall back to email lookup within the project
+  if (!user) {
+    user = await getUserByEmailInProject(headers.userEmail.toLowerCase(), projectId);
+  }
+
+  // 3. If no user exists, create one
+  if (!user) {
+    user = await globalSystemRepo.createResource<User>({
+      resourceType: 'User',
+      email: headers.userEmail.toLowerCase(),
+      externalId: headers.userId,
+      project: { reference: `Project/${projectId}` },
+    });
+    getLogger().info('Gateway auth: created new User', { userId: user.id, email: headers.userEmail });
+  }
+
+  // 4. Find existing ProjectMembership
+  let membership = await globalSystemRepo.searchOne<ProjectMembership>({
+    resourceType: 'ProjectMembership',
+    filters: [
+      { code: 'user', operator: Operator.EQUALS, value: getReferenceString(user) },
+      { code: 'project', operator: Operator.EQUALS, value: `Project/${projectId}` },
+    ],
+  });
+
+  // 5. If no membership, create one with a Practitioner profile
+  if (!membership) {
+    const project = await globalSystemRepo.readResource<Project>('Project', projectId);
+    const projectSystemRepo = await getProjectSystemRepo(project);
+
+    // Parse name from email or Gateway headers
+    const emailPrefix = headers.userEmail.split('@')[0] || 'User';
+    const nameParts = emailPrefix.split(/[._-]/);
+    const givenName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'User';
+    const familyName = nameParts.length > 1
+      ? nameParts.slice(1).map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
+      : 'User';
+
+    // Create Practitioner profile
+    const practitioner = await projectSystemRepo.createResource({
+      resourceType: 'Practitioner',
+      name: [{ given: [givenName], family: familyName }],
+      telecom: [{ system: 'email', value: headers.userEmail.toLowerCase() }],
+      identifier: [
+        {
+          system: 'https://healthtalk.ai/gateway/user-id',
+          value: headers.userId,
+        },
+      ],
+    });
+
+    // Create ProjectMembership
+    membership = await globalSystemRepo.createResource<ProjectMembership>({
+      resourceType: 'ProjectMembership',
+      project: { reference: `Project/${projectId}` },
+      user: createReference(user),
+      profile: { reference: `Practitioner/${practitioner.id}` },
+      externalId: headers.userId,
+    });
+
+    getLogger().info('Gateway auth: created Practitioner and ProjectMembership', {
+      practitionerId: practitioner.id,
+      membershipId: membership.id,
+    });
+  }
+
+  if (membership.active === false) {
+    getLogger().warn('Gateway auth: membership is inactive', { membershipId: membership.id });
+    return undefined;
+  }
+
+  // 6. Read the project
+  const project = await globalSystemRepo.readReference<Project>(membership.project);
+
+  // 7. Create a Login resource
+  const login: Login = {
+    resourceType: 'Login',
+    user: createReference(user),
+    project: { reference: `Project/${projectId}` },
+    membership: createReference(membership),
+    authMethod: 'external',
+    authTime: new Date().toISOString(),
+    scope: 'openid profile email',
+    remoteAddress: req.ip,
+    userAgent: req.get('User-Agent'),
+  };
+
+  // 8. Build auth result using existing makeAuthResult pattern
+  return makeAuthResult(globalSystemRepo, req, login, project, membership);
 }

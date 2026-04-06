@@ -8,7 +8,11 @@ import type { IncomingMessage } from 'node:http';
 import { getConfig } from '../config/loader';
 import { AuthenticatedRequestContext, getRequestContext } from '../context';
 import type { Repository } from '../fhir/repo';
-import { getLoginForAccessToken, getLoginForBasicAuth } from './utils';
+import { getGlobalSystemRepo } from '../fhir/repo';
+import { getLogger } from '../logger';
+import { validateGatewayRequest } from './gateway';
+import type { GatewayHeaders } from './gateway';
+import { getLoginForAccessToken, getLoginForBasicAuth, getLoginForGatewayAuth } from './utils';
 
 export type AuthState = {
   login: Login;
@@ -42,22 +46,32 @@ export function authenticateRequest(req: Request, res: Response, next: NextFunct
 }
 
 export async function authenticateTokenImpl(req: Request): Promise<AuthenticationResult | undefined> {
+  // 1. Try standard Bearer/Basic auth first (backward compatible)
   const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return undefined;
+  if (authHeader) {
+    const [tokenType, token] = authHeader.split(' ');
+    if (tokenType && token) {
+      if (tokenType === 'Bearer') {
+        return getLoginForAccessToken(req, token);
+      }
+      if (tokenType === 'Basic') {
+        return getLoginForBasicAuth(req, token);
+      }
+    }
   }
 
-  const [tokenType, token] = authHeader.split(' ');
-  if (!tokenType || !token) {
-    return undefined;
-  }
-
-  if (tokenType === 'Bearer') {
-    return getLoginForAccessToken(req, token);
-  }
-
-  if (tokenType === 'Basic') {
-    return getLoginForBasicAuth(req, token);
+  // 2. Try Gateway header authentication (HMAC-validated requests from HealthTalk Gateway)
+  const config = getConfig();
+  if (config.gatewayEnabled) {
+    const gatewayHeaders = validateGatewayRequest(req);
+    if (gatewayHeaders) {
+      try {
+        return await getLoginForGatewayAuth(req, gatewayHeaders);
+      } catch (err) {
+        getLogger().warn('Gateway auth failed', { err: String(err), userId: gatewayHeaders.userId });
+        return undefined;
+      }
+    }
   }
 
   return undefined;
