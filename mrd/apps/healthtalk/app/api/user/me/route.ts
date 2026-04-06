@@ -1,5 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerUser } from '@mrd/sdk/auth/server';
+import { getGatewayUrl } from '@mrd/sdk';
+
+const GATEWAY_URL = getGatewayUrl();
+
+/**
+ * Get user from gateway (server-side)
+ */
+async function getServerUser(options: {
+  cookies?: string;
+  sessionId?: string;
+}): Promise<unknown | null> {
+  try {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (options.sessionId) {
+      headers['X-Session-Id'] = options.sessionId;
+    }
+
+    if (options.cookies) {
+      headers['Cookie'] = options.cookies;
+    }
+
+    const response = await fetch(`${GATEWAY_URL}/api/user/me`, {
+      headers,
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * GET /api/user/me

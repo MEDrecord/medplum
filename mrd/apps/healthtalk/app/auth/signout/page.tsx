@@ -9,22 +9,37 @@ import { signOut } from '@mrd/sdk';
  * Handles user sign out and redirects to home.
  */
 export default function SignOutPage() {
-  const [isSigningOut, setIsSigningOut] = useState(true);
+  const [status, setStatus] = useState<'signing-out' | 'signed-out' | 'error'>('signing-out');
 
   useEffect(() => {
     async function performSignOut() {
       try {
         await signOut({ redirect: true, redirectUrl: '/' });
+        // If redirect doesn't happen (e.g., signOut returns), show success
+        setStatus('signed-out');
       } catch {
         // Even if signout fails, redirect to home
-        window.location.href = '/';
+        setStatus('error');
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 2000);
       }
     }
 
     performSignOut();
   }, []);
 
-  if (!isSigningOut) {
+  if (status === 'error') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="space-y-4 text-center">
+          <p className="text-muted-foreground">Sign out completed. Redirecting...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === 'signed-out') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="w-full max-w-md space-y-6 rounded-lg border border-border bg-card p-8 shadow-sm">
@@ -47,6 +62,7 @@ export default function SignOutPage() {
     );
   }
 
+  // signing-out state
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="space-y-4 text-center">

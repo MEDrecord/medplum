@@ -1,5 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession, validateServerSession } from '@mrd/sdk/auth/server';
+import { 
+  getGatewayUrl, 
+  getTenantId,
+} from '@mrd/sdk';
+
+const GATEWAY_URL = getGatewayUrl();
+
+/**
+ * Validate session with gateway (server-side)
+ */
+async function validateServerSession(options: {
+  cookies?: string;
+  sessionId?: string;
+}): Promise<{ valid: boolean; user?: unknown; expiresAt?: string; error?: string }> {
+  try {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (options.sessionId) {
+      headers['X-Session-Id'] = options.sessionId;
+    }
+
+    if (options.cookies) {
+      headers['Cookie'] = options.cookies;
+    }
+
+    const response = await fetch(`${GATEWAY_URL}/api/auth/session`, {
+      headers,
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      return { valid: false, error: 'No session found' };
+    }
+
+    const session = await response.json();
+
+    // Check expiry
+    if (new Date(session.expiresAt) <= new Date()) {
+      return { valid: false, error: 'Session expired' };
+    }
+
+    return {
+      valid: true,
+      user: session.user,
+      expiresAt: session.expiresAt,
+    };
+  } catch {
+    return { valid: false, error: 'Session verification failed' };
+  }
+}
 
 /**
  * GET /api/auth/verify

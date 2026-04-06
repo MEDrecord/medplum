@@ -24,7 +24,6 @@ import {
 import {
   setSessionId,
   getSessionId,
-  removeSessionId,
   setUserData,
   getUserData,
   setExpiresAt,
