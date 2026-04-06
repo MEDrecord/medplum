@@ -2,11 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Center, Loader, Stack, Text, Title } from '@mantine/core';
 import { showNotification } from '@mantine/notifications';
-import { Logo } from '@medplum/react';
+import { Logo, useMedplum } from '@medplum/react';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { getConfig } from './config';
+
+interface GatewayUser {
+  id: string;
+  email: string;
+  name?: string;
+  role?: string;
+  tenantId?: string;
+}
 
 /**
  * HealthTalk Gateway Callback Page
@@ -16,10 +24,64 @@ import { getConfig } from './config';
  */
 export function GatewayCallbackPage(): JSX.Element {
   const navigate = useNavigate();
+  const medplum = useMedplum();
   const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState<'processing' | 'error'>('processing');
+  const [status, setStatus] = useState<'processing' | 'provisioning' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState<string>();
   const config = getConfig();
+
+  /**
+   * Provision or update Practitioner profile in Medplum based on Gateway user
+   */
+  const provisionPractitioner = useCallback(async (user: GatewayUser): Promise<void> => {
+    try {
+      // Search for existing Practitioner with this Gateway user ID
+      const searchResult = await medplum.searchResources('Practitioner', {
+        identifier: `https://healthtalk.ai/gateway/user|${user.id}`,
+      });
+
+      const nameParts = (user.name || user.email.split('@')[0]).split(' ');
+      const givenName = nameParts[0] || '';
+      const familyName = nameParts.slice(1).join(' ') || nameParts[0] || '';
+
+      if (searchResult.length > 0) {
+        // Update existing Practitioner
+        const existing = searchResult[0];
+        await medplum.updateResource({
+          ...existing,
+          name: [{
+            given: [givenName],
+            family: familyName,
+          }],
+          telecom: [
+            { system: 'email', value: user.email, use: 'work' },
+          ],
+        });
+        console.log('[Gateway] Updated existing Practitioner:', existing.id);
+      } else {
+        // Create new Practitioner
+        const practitioner = await medplum.createResource({
+          resourceType: 'Practitioner',
+          identifier: [{
+            system: 'https://healthtalk.ai/gateway/user',
+            value: user.id,
+          }],
+          name: [{
+            given: [givenName],
+            family: familyName,
+          }],
+          telecom: [
+            { system: 'email', value: user.email, use: 'work' },
+          ],
+          active: true,
+        });
+        console.log('[Gateway] Created new Practitioner:', practitioner.id);
+      }
+    } catch (err) {
+      // Log but don't fail the auth flow
+      console.warn('[Gateway] Practitioner provisioning failed:', err);
+    }
+  }, [medplum]);
 
   const exchangeWebToken = useCallback(async (webToken: string): Promise<{ sessionId: string; user: any }> => {
     const gatewayUrl = config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai';
@@ -29,12 +91,15 @@ export function GatewayCallbackPage(): JSX.Element {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ webToken }),
+      body: JSON.stringify({ 
+        webToken,
+        origin: window.location.origin, // Required by gateway for CORS validation
+      }),
     });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || 'Failed to exchange webToken');
+      throw new Error(error.message || error.error || 'Failed to exchange webToken');
     }
 
     return response.json();
@@ -58,6 +123,12 @@ export function GatewayCallbackPage(): JSX.Element {
         localStorage.setItem('gateway.sessionId', result.sessionId);
         localStorage.setItem('gateway.user', JSON.stringify(result.user));
         
+        // Provision Practitioner profile in Medplum
+        setStatus('provisioning');
+        if (result.user) {
+          await provisionPractitioner(result.user as GatewayUser);
+        }
+
         // Show success notification
         showNotification({
           title: 'Signed in with HealthTalk',
@@ -85,7 +156,7 @@ export function GatewayCallbackPage(): JSX.Element {
         color: 'red',
       });
     }
-  }, [searchParams, exchangeWebToken, navigate]);
+  }, [searchParams, exchangeWebToken, provisionPractitioner, navigate]);
 
   useEffect(() => {
     handleCallback();
@@ -110,12 +181,16 @@ export function GatewayCallbackPage(): JSX.Element {
     );
   }
 
+  const statusMessage = status === 'provisioning' 
+    ? 'Setting up your profile...' 
+    : 'Completing sign in...';
+
   return (
     <Center style={{ minHeight: '100vh' }}>
       <Stack align="center" gap="md">
         <Logo size={48} />
         <Loader size="lg" color="teal" />
-        <Text c="dimmed">Completing sign in...</Text>
+        <Text c="dimmed">{statusMessage}</Text>
       </Stack>
     </Center>
   );
