@@ -28,3 +28,21 @@ export {
   useSubmitQuestionnaireResponse,
   useQuestionnaireForm,
 } from './use-questionnaire';
+
+// Questionnaire Builder
+export {
+  useQuestionnaireBuilder,
+  type UseQuestionnaireBuilderOptions,
+  type UseQuestionnaireBuilderReturn,
+  type ValidationError,
+} from './use-questionnaire-builder';
+
+// Score Configuration
+export {
+  useScoreConfiguration,
+  SCORE_PRESETS,
+  type UseScoreConfigurationOptions,
+  type UseScoreConfigurationReturn,
+  type ScoreValidationError,
+  type ScorePreset,
+} from './use-score-configuration';
