@@ -29,16 +29,26 @@ process.env.MEDPLUM_VERSION = packageJson.version + '-' + gitHash;
 // When process.env has MEDPLUM_BASE_URL (Vercel, CI), force it into
 // import.meta.env so it cannot be overridden by a stale .env / .env.defaults.
 // Vite's `define` takes precedence over env-file loading.
+const ENV_OVERRIDE_KEYS = [
+  'MEDPLUM_BASE_URL', 'MEDPLUM_CLIENT_ID', 'MEDPLUM_REGISTER_ENABLED',
+  'MEDPLUM_AWS_TEXTRACT_ENABLED', 'MEDPLUM_GATEWAY_URL', 'MEDPLUM_GATEWAY_TENANT_ID',
+  'MEDPLUM_GATEWAY_ENABLED', 'GOOGLE_CLIENT_ID', 'RECAPTCHA_SITE_KEY',
+] as const;
+
 function envOverrides(): Record<string, string> {
   const overrides: Record<string, string> = {};
-  const keys = ['MEDPLUM_BASE_URL', 'MEDPLUM_CLIENT_ID', 'MEDPLUM_REGISTER_ENABLED',
-    'MEDPLUM_AWS_TEXTRACT_ENABLED', 'MEDPLUM_GATEWAY_URL', 'MEDPLUM_GATEWAY_TENANT_ID',
-    'MEDPLUM_GATEWAY_ENABLED', 'GOOGLE_CLIENT_ID', 'RECAPTCHA_SITE_KEY'];
-  for (const key of keys) {
+  for (const key of ENV_OVERRIDE_KEYS) {
     if (process.env[key]) {
       overrides[`import.meta.env.${key}`] = JSON.stringify(process.env[key]);
     }
   }
+  // Build-time diagnostics (visible in Vercel build logs)
+  const baseUrl = process.env.MEDPLUM_BASE_URL;
+  const envFileExists = existsSync(path.join(__dirname, '.env'));
+  const envDefaultsExists = existsSync(envDefaultsPath);
+  console.log(`[vite.config] MEDPLUM_BASE_URL from process.env: ${baseUrl ?? '(not set)'}`);
+  console.log(`[vite.config] .env exists: ${envFileExists}, .env.defaults exists: ${envDefaultsExists}`);
+  console.log(`[vite.config] define overrides applied: ${Object.keys(overrides).join(', ') || '(none)'}`);
   return overrides;
 }
 
