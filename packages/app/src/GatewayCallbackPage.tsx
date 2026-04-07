@@ -6,7 +6,6 @@ import { Logo, useMedplum } from '@medplum/react';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { getConfig } from './config';
 
 /**
  * HealthTalk Gateway Callback Page
@@ -22,7 +21,6 @@ export function GatewayCallbackPage(): JSX.Element {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<'authenticating' | 'complete' | 'error'>('authenticating');
   const [errorMessage, setErrorMessage] = useState<string>();
-  const config = getConfig();
 
   const handleCallback = useCallback(async () => {
     try {
@@ -57,47 +55,23 @@ export function GatewayCallbackPage(): JSX.Element {
 
       setStatus('authenticating');
 
-      // If no webToken in URL, try to get session from gateway via cookie.
-      // The gateway sets auth.sid on .healthtalk.ai, so the cookie is available
-      // when fetching from the gateway subdomain.
-      let sessionId: string | undefined;
-      if (!webToken) {
-        const gatewayUrl = config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai';
-        try {
-          const sessionRes = await fetch(`${gatewayUrl}/api/auth/session`, {
-            method: 'GET',
-            credentials: 'include',
-          });
-          if (sessionRes.ok) {
-            const sessionData = await sessionRes.json();
-            sessionId = sessionData.sessionId;
-          }
-        } catch {
-          // Gateway session fetch failed, will error below
-        }
-
-        if (!sessionId) {
-          throw new Error('No authentication token received. Please sign in again.');
-        }
-      }
-
-      // Call Medplum server's /auth/gateway endpoint
-      // All heavy lifting happens server-side:
-      //   - webToken exchange with Gateway (if provided)
-      //   - Session validation with Gateway (if sessionId)
-      //   - User creation/lookup
-      //   - Practitioner provisioning
-      //   - Token generation
+      // Call Medplum server's /auth/gateway endpoint.
+      // Auth is resolved server-side in this priority:
+      //   1. webToken in body (cross-domain token exchange)
+      //   2. auth.sid cookie (sent via credentials:'include' -- the gateway
+      //      sets this httpOnly cookie on .healthtalk.ai, and the Medplum
+      //      server at fhir-api-*.healthtalk.ai receives it automatically)
+      // If neither is present, the server returns an error.
       const baseUrl = medplum.getBaseUrl();
       const reqBody: Record<string, string> = {};
       if (webToken) {
         reqBody.webToken = webToken;
-      } else if (sessionId) {
-        reqBody.sessionId = sessionId;
       }
+      // credentials:'include' sends the auth.sid cookie to the Medplum server
       const response = await fetch(`${baseUrl}auth/gateway`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(reqBody),
       });
 

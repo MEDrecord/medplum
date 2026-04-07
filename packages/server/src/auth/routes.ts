@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { badRequest } from '@medplum/core';
 import type { OperationOutcome, Project } from '@medplum/fhirtypes';
+import cookieParser from 'cookie-parser';
 import { Router } from 'express';
 import { authenticateRequest } from '../oauth/middleware';
 import { changePasswordHandler, changePasswordValidator } from './changepassword';
@@ -43,7 +44,7 @@ authRouter.post('/setpassword', setPasswordValidator, setPasswordHandler);
 authRouter.post('/verifyemail', verifyEmailValidator, verifyEmailHandler);
 authRouter.post('/google', googleValidator, googleHandler);
 authRouter.post('/exchange', exchangeValidator, exchangeHandler);
-authRouter.post('/gateway', gatewayLoginValidator, gatewayLoginHandler);
+authRouter.post('/gateway', cookieParser(), gatewayLoginValidator, gatewayLoginHandler);
 authRouter.post('/revoke', authenticateRequest, revokeValidator, revokeHandler);
 authRouter.get('/login/:login', statusValidator, statusHandler);
 authRouter.get('/clientinfo/:clientId', clientInfoHandler);
