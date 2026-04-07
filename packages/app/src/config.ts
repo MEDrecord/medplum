@@ -98,6 +98,18 @@ let csrfToken: string | undefined;
 let csrfFetchPromise: Promise<string | undefined> | undefined;
 
 async function fetchCsrfToken(): Promise<string | undefined> {
+  // First check if the gateway set a CSRF cookie (non-httpOnly) during sign-in
+  const cookieMatch = document.cookie.match(/(?:^|;\s*)(?:csrf[_-]?token|_csrf)=([^;]*)/i);
+  if (cookieMatch) {
+    csrfToken = decodeURIComponent(cookieMatch[1]);
+    return csrfToken;
+  }
+
+  // If no cookie, try fetching from gateway. This is cross-origin
+  // (fhir-tst.healthtalk.ai -> auth-test-b2c.healthtalk.ai) so it
+  // requires the gateway to have our origin in its CORS config.
+  // If CORS blocks it, we proceed without a token and rely on the
+  // retry mechanism to handle CSRF failures.
   const gatewayUrl = (config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai').replace(/\/+$/, '');
   try {
     const res = await fetch(`${gatewayUrl}/api/auth/csrf`, {
@@ -110,7 +122,7 @@ async function fetchCsrfToken(): Promise<string | undefined> {
       return csrfToken;
     }
   } catch {
-    // CSRF fetch failed, proceed without token
+    // CORS blocked or network error -- proceed without pre-fetched token
   }
   return undefined;
 }
@@ -138,6 +150,19 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export function createGatewayFetch(): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const method = (init?.method || 'GET').toUpperCase();
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+
+    // Intercept logout: MedplumClient sends POST /oauth2/logout through the proxy,
+    // but the gateway proxy returns 415. Instead, call the gateway's signout
+    // endpoint directly via redirect to clear the auth.sid session cookie.
+    if (method === 'POST' && url.includes('/oauth2/logout')) {
+      const gatewayUrl = (config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai').replace(/\/+$/, '');
+      // Redirect to gateway signout which clears the session and redirects back
+      window.location.href = `${gatewayUrl}/api/auth/signout?callbackUrl=${encodeURIComponent(window.location.origin + '/signin')}`;
+      // Return a fake 200 so MedplumClient's signOut() doesn't throw
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
     const headers = new Headers(init?.headers);
 
     if (MUTATING_METHODS.has(method)) {
@@ -151,16 +176,24 @@ export function createGatewayFetch(): typeof fetch {
 
     const response = await fetch(input, init);
 
-    // If CSRF failed, refresh token and retry once
-    if (response.status === 403 && MUTATING_METHODS.has((init?.method || 'GET').toUpperCase())) {
+    // If CSRF failed (403), extract token from response if provided and retry once
+    if (response.status === 403 && MUTATING_METHODS.has(method)) {
       const body = await response.clone().json().catch(() => ({}));
-      if (body?.error === 'CSRF validation failed') {
-        csrfToken = undefined; // Invalidate cached token
-        const freshToken = await fetchCsrfToken();
-        if (freshToken) {
-          const headers = new Headers(init?.headers);
-          headers.set('X-CSRF-Token', freshToken);
-          return fetch(input, { ...init, headers });
+      if (body?.error === 'CSRF validation failed' || body?.message?.includes('CSRF')) {
+        csrfToken = undefined;
+
+        // Some gateways return the expected token in the error response
+        if (body?.csrfToken || body?.token) {
+          csrfToken = body.csrfToken || body.token;
+        } else {
+          // Try fetching fresh token
+          await fetchCsrfToken();
+        }
+
+        if (csrfToken) {
+          const retryHeaders = new Headers(init?.headers);
+          retryHeaders.set('X-CSRF-Token', csrfToken);
+          return fetch(input, { ...init, headers: retryHeaders });
         }
       }
     }
