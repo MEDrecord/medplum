@@ -43,17 +43,6 @@ function envOverrides(): Record<string, string> {
       overrides[`import.meta.env.${key}`] = JSON.stringify(process.env[key]);
     }
   }
-  // Build-time diagnostics (visible in Vercel build logs)
-  const baseUrl = process.env.MEDPLUM_BASE_URL;
-  const envFileExists = existsSync(path.join(__dirname, '.env'));
-  const envDefaultsExists = existsSync(envDefaultsPath);
-  console.log(`[vite.config] MEDPLUM_BASE_URL from process.env: ${baseUrl ?? '(not set)'}`);
-  console.log(`[vite.config] GOOGLE_CLIENT_ID from process.env: ${process.env.GOOGLE_CLIENT_ID ? '(set)' : '(not set)'}`);
-  console.log(`[vite.config] MEDPLUM_GATEWAY_URL from process.env: ${process.env.MEDPLUM_GATEWAY_URL ?? '(not set)'}`);
-  console.log(`[vite.config] MEDPLUM_GATEWAY_SERVICE_NAME from process.env: ${process.env.MEDPLUM_GATEWAY_SERVICE_NAME ?? '(not set)'}`);
-  console.log(`[vite.config] MEDPLUM_GATEWAY_ENABLED from process.env: ${process.env.MEDPLUM_GATEWAY_ENABLED ?? '(not set)'}`);
-  console.log(`[vite.config] .env exists: ${envFileExists}, .env.defaults exists: ${envDefaultsExists}`);
-  console.log(`[vite.config] define overrides applied: ${Object.keys(overrides).join(', ') || '(none)'}`);
   return overrides;
 }
 

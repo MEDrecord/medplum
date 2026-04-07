@@ -26,8 +26,30 @@ const config: MedplumAppConfig = {
   gatewayUrl: import.meta.env?.MEDPLUM_GATEWAY_URL || 'https://auth-test-b2c.healthtalk.ai',
   gatewayTenantId: import.meta.env?.MEDPLUM_GATEWAY_TENANT_ID || 'default',
   gatewayEnabled: import.meta.env?.MEDPLUM_GATEWAY_ENABLED ?? true,
-  gatewayServiceName: import.meta.env?.MEDPLUM_GATEWAY_SERVICE_NAME,
+  gatewayServiceName: import.meta.env?.MEDPLUM_GATEWAY_SERVICE_NAME || deriveServiceName(),
 };
+
+/**
+ * Derive the gateway service name from MEDPLUM_BASE_URL when not explicitly set.
+ * e.g. "https://fhir-api-tst.healthtalk.ai/" -> "fhir-api-tst"
+ */
+function deriveServiceName(): string | undefined {
+  try {
+    const baseUrl = import.meta.env?.MEDPLUM_BASE_URL;
+    if (!baseUrl) {
+      return undefined;
+    }
+    const hostname = new URL(baseUrl).hostname; // "fhir-api-tst.healthtalk.ai"
+    const parts = hostname.split('.');
+    // Take everything before the domain (e.g. "fhir-api-tst" from "fhir-api-tst.healthtalk.ai")
+    if (parts.length >= 3) {
+      return parts.slice(0, parts.length - 2).join('.');
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export function getConfig(): MedplumAppConfig {
   return config;
