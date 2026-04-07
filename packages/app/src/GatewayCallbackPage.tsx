@@ -39,32 +39,66 @@ export function GatewayCallbackPage(): JSX.Element {
         return;
       }
 
+      // The gateway may provide auth in one of two ways:
+      //   1. webToken query param (cross-domain token exchange)
+      //   2. auth.sid cookie (same-domain session, set on .healthtalk.ai)
+      // Try webToken first, fall back to cookie-based session auth.
       const webToken = searchParams.get('webToken');
-      if (!webToken) {
-        throw new Error('No authentication token received');
-      }
 
       // Prevent re-processing on page refresh
-      const storedToken = sessionStorage.getItem('gateway.lastWebToken');
-      if (storedToken === webToken && medplum.getActiveLogin()) {
-        const nextUrl = searchParams.get('next');
-        navigate(nextUrl?.startsWith('/') ? nextUrl : '/', { replace: true });
-        return;
+      if (webToken) {
+        const storedToken = sessionStorage.getItem('gateway.lastWebToken');
+        if (storedToken === webToken && medplum.getActiveLogin()) {
+          const nextUrl = searchParams.get('next');
+          navigate(nextUrl?.startsWith('/') ? nextUrl : '/', { replace: true });
+          return;
+        }
       }
 
       setStatus('authenticating');
 
+      // If no webToken in URL, try to get session from gateway via cookie.
+      // The gateway sets auth.sid on .healthtalk.ai, so the cookie is available
+      // when fetching from the gateway subdomain.
+      let sessionId: string | undefined;
+      if (!webToken) {
+        const gatewayUrl = config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai';
+        try {
+          const sessionRes = await fetch(`${gatewayUrl}/api/auth/session`, {
+            method: 'GET',
+            credentials: 'include',
+          });
+          if (sessionRes.ok) {
+            const sessionData = await sessionRes.json();
+            sessionId = sessionData.sessionId;
+          }
+        } catch {
+          // Gateway session fetch failed, will error below
+        }
+
+        if (!sessionId) {
+          throw new Error('No authentication token received. Please sign in again.');
+        }
+      }
+
       // Call Medplum server's /auth/gateway endpoint
       // All heavy lifting happens server-side:
-      //   - webToken exchange with Gateway
+      //   - webToken exchange with Gateway (if provided)
+      //   - Session validation with Gateway (if sessionId)
       //   - User creation/lookup
       //   - Practitioner provisioning
       //   - Token generation
       const baseUrl = medplum.getBaseUrl();
+      const reqBody: Record<string, string> = {};
+      if (webToken) {
+        reqBody.webToken = webToken;
+      } else if (sessionId) {
+        reqBody.sessionId = sessionId;
+      }
       const response = await fetch(`${baseUrl}auth/gateway`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webToken }),
+        body: JSON.stringify(reqBody),
       });
 
       if (!response.ok) {
@@ -85,7 +119,9 @@ export function GatewayCallbackPage(): JSX.Element {
       });
 
       // Prevent re-exchange on refresh
-      sessionStorage.setItem('gateway.lastWebToken', webToken);
+      if (webToken) {
+        sessionStorage.setItem('gateway.lastWebToken', webToken);
+      }
 
       setStatus('complete');
       showNotification({
