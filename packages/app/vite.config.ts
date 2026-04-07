@@ -32,7 +32,8 @@ process.env.MEDPLUM_VERSION = packageJson.version + '-' + gitHash;
 const ENV_OVERRIDE_KEYS = [
   'MEDPLUM_BASE_URL', 'MEDPLUM_CLIENT_ID', 'MEDPLUM_REGISTER_ENABLED',
   'MEDPLUM_AWS_TEXTRACT_ENABLED', 'MEDPLUM_GATEWAY_URL', 'MEDPLUM_GATEWAY_TENANT_ID',
-  'MEDPLUM_GATEWAY_ENABLED', 'GOOGLE_CLIENT_ID', 'RECAPTCHA_SITE_KEY',
+  'MEDPLUM_GATEWAY_ENABLED', 'MEDPLUM_GATEWAY_SERVICE_NAME',
+  'GOOGLE_CLIENT_ID', 'GOOGLE_AUTH_ORIGINS', 'RECAPTCHA_SITE_KEY',
 ] as const;
 
 function envOverrides(): Record<string, string> {
@@ -47,6 +48,7 @@ function envOverrides(): Record<string, string> {
   const envFileExists = existsSync(path.join(__dirname, '.env'));
   const envDefaultsExists = existsSync(envDefaultsPath);
   console.log(`[vite.config] MEDPLUM_BASE_URL from process.env: ${baseUrl ?? '(not set)'}`);
+  console.log(`[vite.config] GOOGLE_CLIENT_ID from process.env: ${process.env.GOOGLE_CLIENT_ID ? '(set)' : '(not set)'}`);
   console.log(`[vite.config] .env exists: ${envFileExists}, .env.defaults exists: ${envDefaultsExists}`);
   console.log(`[vite.config] define overrides applied: ${Object.keys(overrides).join(', ') || '(none)'}`);
   return overrides;

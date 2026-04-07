@@ -13,6 +13,7 @@ import { sendOutcome } from '../fhir/outcomes';
 import { getGlobalSystemRepo, getProjectSystemRepo } from '../fhir/repo';
 import type { SystemRepository } from '../fhir/repo';
 import { getLogger } from '../logger';
+import { validateGatewayRequest } from '../oauth/gateway';
 import { generateSecret, generateAccessToken, generateIdToken, generateRefreshToken } from '../oauth/keys';
 import { getUserByExternalId, getUserByEmailInProject } from '../oauth/utils';
 import { createProfile, createProjectMembership } from './utils';
@@ -32,7 +33,6 @@ interface GatewayUserInfo {
  * Validators for POST /auth/gateway
  */
 export const gatewayLoginValidator = [
-  body('sessionId').optional().isString(),
   body('webToken').optional().isString(),
   body('projectId').optional().isString(),
 ];
@@ -74,11 +74,32 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
     userInfo = await exchangeWebToken(gatewayUrl, webToken, req.headers.origin || req.headers.referer);
   }
 
-  // Option B: Validate existing session (re-auth / API calls)
+  // Option B: Validate session via auth.sid cookie (same-domain flow).
+  // The gateway sets auth.sid on .healthtalk.ai. Since the Medplum server
+  // is also on .healthtalk.ai, the browser sends this cookie automatically
+  // when the client uses credentials:'include'. We forward it to the
+  // gateway's GET /api/auth/session endpoint to get user info.
   if (!userInfo) {
-    const sessionId = req.body.sessionId || req.cookies?.['auth.sid'] || req.headers['x-session-id'];
-    if (sessionId) {
-      userInfo = await validateSession(gatewayUrl, sessionId);
+    const sessionCookie = req.cookies?.['auth.sid'] || req.headers['x-session-id'];
+    if (sessionCookie) {
+      userInfo = await validateSessionViaCookie(gatewayUrl, sessionCookie);
+    }
+  }
+
+  // Option C: Request arrived through the gateway proxy with HMAC headers.
+  // The gateway already validated auth.sid, resolved the user, and signed
+  // the request. We just need to validate the HMAC and read the user info
+  // from the trusted headers (X-User-Id, X-User-Email, etc.).
+  if (!userInfo) {
+    const gatewayHeaders = validateGatewayRequest(req);
+    if (gatewayHeaders && gatewayHeaders.userId && gatewayHeaders.userEmail) {
+      userInfo = {
+        id: gatewayHeaders.userId,
+        email: gatewayHeaders.userEmail,
+        role: gatewayHeaders.userRole,
+        tenantId: gatewayHeaders.tenantId,
+      };
+      logger.info('Gateway login: authenticated via HMAC headers', { userId: userInfo.id });
     }
   }
 
@@ -88,9 +109,13 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
   }
 
   // --- Step 2: Resolve project ---
-  const projectId = req.body.projectId || config.defaultProjectId;
+  // Priority: explicit body param > config env var > first non-system project from DB
+  let projectId = req.body.projectId || config.defaultProjectId;
   if (!projectId) {
-    sendOutcome(res, badRequest('Project ID is required'));
+    projectId = await resolveDefaultProjectId();
+  }
+  if (!projectId) {
+    sendOutcome(res, badRequest('No project found. Create a project first.'));
     return;
   }
 
@@ -241,20 +266,63 @@ async function exchangeWebToken(
   }
 }
 
-async function validateSession(gatewayUrl: string, sessionId: string): Promise<GatewayUserInfo | undefined> {
+/**
+ * Validate a gateway session by forwarding the auth.sid cookie to the
+ * gateway's GET /api/auth/session endpoint. This is the same endpoint
+ * the browser calls -- we just forward the cookie server-to-server.
+ *
+ * Also tries GET /api/user/me for richer user data (name, role, tenantId).
+ */
+async function validateSessionViaCookie(gatewayUrl: string, sessionCookie: string): Promise<GatewayUserInfo | undefined> {
   try {
-    const response = await fetch(`${gatewayUrl}/api/auth/session/validate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId }),
+    // Forward the cookie to GET /api/auth/session
+    const cookieHeader = `auth.sid=${sessionCookie}`;
+    const sessionRes = await fetch(`${gatewayUrl}/api/auth/session`, {
+      method: 'GET',
+      headers: { Cookie: cookieHeader },
     });
-    if (!response.ok) {
+    if (!sessionRes.ok) {
+      getLogger().warn('Gateway: session cookie invalid', { status: sessionRes.status });
       return undefined;
     }
-    const data = (await response.json()) as { valid?: boolean; user?: GatewayUserInfo };
-    return data.valid && data.user ? data.user : undefined;
+    const sessionData = (await sessionRes.json()) as {
+      user?: { id?: string; email?: string; name?: string };
+      sessionId?: string;
+    };
+    if (!sessionData.user?.id || !sessionData.user?.email) {
+      return undefined;
+    }
+
+    // Try to get richer user info from /api/user/me
+    let role: string | undefined;
+    let tenantId: string | undefined;
+    try {
+      const meRes = await fetch(`${gatewayUrl}/api/user/me`, {
+        method: 'GET',
+        headers: { Cookie: cookieHeader },
+      });
+      if (meRes.ok) {
+        const meData = (await meRes.json()) as {
+          role?: string;
+          tenantId?: string;
+          name?: string;
+        };
+        role = meData.role;
+        tenantId = meData.tenantId;
+      }
+    } catch {
+      // /api/user/me is optional enrichment, session is still valid
+    }
+
+    return {
+      id: sessionData.user.id,
+      email: sessionData.user.email,
+      name: sessionData.user.name,
+      role,
+      tenantId,
+    };
   } catch (err) {
-    getLogger().warn('Gateway: session validation failed', { error: String(err) });
+    getLogger().warn('Gateway: session validation via cookie failed', { error: String(err) });
     return undefined;
   }
 }
@@ -289,4 +357,60 @@ function getLastName(name: string | undefined): string {
     return parts.length > 1 ? parts.slice(1).join(' ') : parts[0];
   }
   return 'User';
+}
+
+/**
+ * Cache for the default project ID so we don't query on every request.
+ */
+let cachedDefaultProjectId: string | undefined;
+
+/**
+ * Resolve the default project from the database.
+ * Finds the first Project resource that is NOT the built-in system/super-admin project.
+ * Caches the result for the lifetime of the process.
+ */
+export async function resolveDefaultProjectId(): Promise<string | undefined> {
+  if (cachedDefaultProjectId) {
+    return cachedDefaultProjectId;
+  }
+
+  try {
+    const systemRepo = getGlobalSystemRepo();
+    // Search for projects, sorted by creation date (oldest first = most likely the main project)
+    const projects = await systemRepo.searchResources<Project>({
+      resourceType: 'Project',
+      count: 10,
+      sortRules: [{ code: '_lastUpdated', descending: false }],
+    });
+
+    // Find the first non-system project (system projects typically have superAdmin=true
+    // or are named "Super Admin" / "Medplum")
+    const defaultProject = projects.find(
+      (p) => !p.superAdmin && p.name !== 'Super Admin' && p.name !== 'Medplum'
+    );
+
+    if (defaultProject?.id) {
+      cachedDefaultProjectId = defaultProject.id;
+      getLogger().info('Gateway: resolved default project from DB', {
+        projectId: defaultProject.id,
+        projectName: defaultProject.name,
+      });
+      return defaultProject.id;
+    }
+
+    // If no non-system project, use the first one available
+    if (projects.length > 0 && projects[0].id) {
+      cachedDefaultProjectId = projects[0].id;
+      getLogger().info('Gateway: using first available project', {
+        projectId: projects[0].id,
+        projectName: projects[0].name,
+      });
+      return projects[0].id;
+    }
+
+    return undefined;
+  } catch (err) {
+    getLogger().warn('Gateway: failed to resolve default project', { error: String(err) });
+    return undefined;
+  }
 }
