@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "build": "cd packages/app && npm run build",
-    "dev": "cd packages/app && npm run dev",
+    "dev": "cd packages/app && node ../../node_modules/vite/bin/vite.js --host",
     "start": "cd packages/app && npm run preview",
     "lint": "cd packages/app && npm run lint"
   },
