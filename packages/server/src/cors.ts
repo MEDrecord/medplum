@@ -27,7 +27,11 @@ function isOriginAllowed(origin: string | undefined): boolean {
   }
 
   const config = getConfig();
-  if (config.appBaseUrl.startsWith(origin) || config.allowedOrigins === '*') {
+  if (config.allowedOrigins === '*') {
+    return true;
+  }
+
+  if (config.appBaseUrl?.startsWith(origin)) {
     return true;
   }
 
