@@ -13,6 +13,7 @@ import { sendOutcome } from '../fhir/outcomes';
 import { getGlobalSystemRepo, getProjectSystemRepo } from '../fhir/repo';
 import type { SystemRepository } from '../fhir/repo';
 import { getLogger } from '../logger';
+import { validateGatewayRequest } from '../oauth/gateway';
 import { generateSecret, generateAccessToken, generateIdToken, generateRefreshToken } from '../oauth/keys';
 import { getUserByExternalId, getUserByEmailInProject } from '../oauth/utils';
 import { createProfile, createProjectMembership } from './utils';
@@ -82,6 +83,23 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
     const sessionCookie = req.cookies?.['auth.sid'] || req.headers['x-session-id'];
     if (sessionCookie) {
       userInfo = await validateSessionViaCookie(gatewayUrl, sessionCookie);
+    }
+  }
+
+  // Option C: Request arrived through the gateway proxy with HMAC headers.
+  // The gateway already validated auth.sid, resolved the user, and signed
+  // the request. We just need to validate the HMAC and read the user info
+  // from the trusted headers (X-User-Id, X-User-Email, etc.).
+  if (!userInfo) {
+    const gatewayHeaders = validateGatewayRequest(req);
+    if (gatewayHeaders && gatewayHeaders.userId && gatewayHeaders.userEmail) {
+      userInfo = {
+        id: gatewayHeaders.userId,
+        email: gatewayHeaders.userEmail,
+        role: gatewayHeaders.userRole,
+        tenantId: gatewayHeaders.tenantId,
+      };
+      logger.info('Gateway login: authenticated via HMAC headers', { userId: userInfo.id });
     }
   }
 
