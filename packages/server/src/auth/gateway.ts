@@ -32,7 +32,6 @@ interface GatewayUserInfo {
  * Validators for POST /auth/gateway
  */
 export const gatewayLoginValidator = [
-  body('sessionId').optional().isString(),
   body('webToken').optional().isString(),
   body('projectId').optional().isString(),
 ];
@@ -74,11 +73,15 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
     userInfo = await exchangeWebToken(gatewayUrl, webToken, req.headers.origin || req.headers.referer);
   }
 
-  // Option B: Validate existing session (re-auth / API calls)
+  // Option B: Validate session via auth.sid cookie (same-domain flow).
+  // The gateway sets auth.sid on .healthtalk.ai. Since the Medplum server
+  // is also on .healthtalk.ai, the browser sends this cookie automatically
+  // when the client uses credentials:'include'. We forward it to the
+  // gateway's GET /api/auth/session endpoint to get user info.
   if (!userInfo) {
-    const sessionId = req.body.sessionId || req.cookies?.['auth.sid'] || req.headers['x-session-id'];
-    if (sessionId) {
-      userInfo = await validateSession(gatewayUrl, sessionId);
+    const sessionCookie = req.cookies?.['auth.sid'] || req.headers['x-session-id'];
+    if (sessionCookie) {
+      userInfo = await validateSessionViaCookie(gatewayUrl, sessionCookie);
     }
   }
 
@@ -241,20 +244,63 @@ async function exchangeWebToken(
   }
 }
 
-async function validateSession(gatewayUrl: string, sessionId: string): Promise<GatewayUserInfo | undefined> {
+/**
+ * Validate a gateway session by forwarding the auth.sid cookie to the
+ * gateway's GET /api/auth/session endpoint. This is the same endpoint
+ * the browser calls -- we just forward the cookie server-to-server.
+ *
+ * Also tries GET /api/user/me for richer user data (name, role, tenantId).
+ */
+async function validateSessionViaCookie(gatewayUrl: string, sessionCookie: string): Promise<GatewayUserInfo | undefined> {
   try {
-    const response = await fetch(`${gatewayUrl}/api/auth/session/validate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId }),
+    // Forward the cookie to GET /api/auth/session
+    const cookieHeader = `auth.sid=${sessionCookie}`;
+    const sessionRes = await fetch(`${gatewayUrl}/api/auth/session`, {
+      method: 'GET',
+      headers: { Cookie: cookieHeader },
     });
-    if (!response.ok) {
+    if (!sessionRes.ok) {
+      getLogger().warn('Gateway: session cookie invalid', { status: sessionRes.status });
       return undefined;
     }
-    const data = (await response.json()) as { valid?: boolean; user?: GatewayUserInfo };
-    return data.valid && data.user ? data.user : undefined;
+    const sessionData = (await sessionRes.json()) as {
+      user?: { id?: string; email?: string; name?: string };
+      sessionId?: string;
+    };
+    if (!sessionData.user?.id || !sessionData.user?.email) {
+      return undefined;
+    }
+
+    // Try to get richer user info from /api/user/me
+    let role: string | undefined;
+    let tenantId: string | undefined;
+    try {
+      const meRes = await fetch(`${gatewayUrl}/api/user/me`, {
+        method: 'GET',
+        headers: { Cookie: cookieHeader },
+      });
+      if (meRes.ok) {
+        const meData = (await meRes.json()) as {
+          role?: string;
+          tenantId?: string;
+          name?: string;
+        };
+        role = meData.role;
+        tenantId = meData.tenantId;
+      }
+    } catch {
+      // /api/user/me is optional enrichment, session is still valid
+    }
+
+    return {
+      id: sessionData.user.id,
+      email: sessionData.user.email,
+      name: sessionData.user.name,
+      role,
+      tenantId,
+    };
   } catch (err) {
-    getLogger().warn('Gateway: session validation failed', { error: String(err) });
+    getLogger().warn('Gateway: session validation via cookie failed', { error: String(err) });
     return undefined;
   }
 }
