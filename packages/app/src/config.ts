@@ -138,15 +138,16 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export function createGatewayFetch(): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const method = (init?.method || 'GET').toUpperCase();
+    const headers = new Headers(init?.headers);
 
     if (MUTATING_METHODS.has(method)) {
       const token = await getCsrfToken();
       if (token) {
-        const headers = new Headers(init?.headers);
         headers.set('X-CSRF-Token', token);
-        init = { ...init, headers };
       }
     }
+
+    init = { ...init, headers, credentials: 'include' };
 
     const response = await fetch(input, init);
 
