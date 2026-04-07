@@ -11,6 +11,8 @@ export interface MedplumAppConfig {
   gatewayUrl?: string;
   gatewayTenantId?: string;
   gatewayEnabled?: boolean | string;
+  /** Service name used in the gateway proxy path, e.g. "fhir-api-tst" */
+  gatewayServiceName?: string;
 }
 
 const config: MedplumAppConfig = {
@@ -24,6 +26,7 @@ const config: MedplumAppConfig = {
   gatewayUrl: import.meta.env?.MEDPLUM_GATEWAY_URL || 'https://auth-test-b2c.healthtalk.ai',
   gatewayTenantId: import.meta.env?.MEDPLUM_GATEWAY_TENANT_ID || 'default',
   gatewayEnabled: import.meta.env?.MEDPLUM_GATEWAY_ENABLED ?? true,
+  gatewayServiceName: import.meta.env?.MEDPLUM_GATEWAY_SERVICE_NAME,
 };
 
 export function getConfig(): MedplumAppConfig {
@@ -40,6 +43,23 @@ export function isAwsTextractEnabled(): boolean {
 
 export function isGatewayEnabled(): boolean {
   return isFeatureEnabled('gatewayEnabled');
+}
+
+/**
+ * Returns the base URL the MedplumClient should use.
+ * When the gateway is enabled and a service name is configured, all FHIR/auth
+ * calls are routed through the gateway proxy so the auth.sid cookie (same-domain,
+ * httpOnly) is forwarded automatically by the browser.
+ *
+ * Example: https://auth-test-b2c.healthtalk.ai/api/gateway/proxy/fhir-api-tst/
+ */
+export function getEffectiveBaseUrl(): string | undefined {
+  if (isGatewayEnabled() && config.gatewayServiceName && config.gatewayUrl) {
+    const gw = config.gatewayUrl.replace(/\/+$/, '');
+    const svc = config.gatewayServiceName.replace(/^\/+|\/+$/g, '');
+    return `${gw}/api/gateway/proxy/${svc}/`;
+  }
+  return config.baseUrl;
 }
 
 export function getGatewaySignInUrl(callbackUrl: string): string {
