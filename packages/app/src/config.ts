@@ -90,6 +90,84 @@ export function getGatewaySignInUrl(callbackUrl: string): string {
   return `${gatewayUrl}/api/auth/signin?tenantId=${tenantId}&callbackUrl=${encodeURIComponent(callbackUrl)}`;
 }
 
+/**
+ * CSRF token cache for gateway proxy requests.
+ * The gateway requires X-CSRF-Token on mutating requests (POST/PUT/PATCH/DELETE).
+ */
+let csrfToken: string | undefined;
+let csrfFetchPromise: Promise<string | undefined> | undefined;
+
+async function fetchCsrfToken(): Promise<string | undefined> {
+  const gatewayUrl = (config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai').replace(/\/+$/, '');
+  try {
+    const res = await fetch(`${gatewayUrl}/api/auth/csrf`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      csrfToken = data.csrfToken || data.token;
+      return csrfToken;
+    }
+  } catch {
+    // CSRF fetch failed, proceed without token
+  }
+  return undefined;
+}
+
+async function getCsrfToken(): Promise<string | undefined> {
+  if (csrfToken) {
+    return csrfToken;
+  }
+  // Deduplicate concurrent CSRF fetches
+  if (!csrfFetchPromise) {
+    csrfFetchPromise = fetchCsrfToken().finally(() => {
+      csrfFetchPromise = undefined;
+    });
+  }
+  return csrfFetchPromise;
+}
+
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/**
+ * Creates a fetch wrapper that adds CSRF tokens to mutating requests
+ * going through the gateway proxy. GET/HEAD/OPTIONS pass through unchanged.
+ * If a request fails with 403 CSRF, retries once with a fresh token.
+ */
+export function createGatewayFetch(): typeof fetch {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const method = (init?.method || 'GET').toUpperCase();
+
+    if (MUTATING_METHODS.has(method)) {
+      const token = await getCsrfToken();
+      if (token) {
+        const headers = new Headers(init?.headers);
+        headers.set('X-CSRF-Token', token);
+        init = { ...init, headers };
+      }
+    }
+
+    const response = await fetch(input, init);
+
+    // If CSRF failed, refresh token and retry once
+    if (response.status === 403 && MUTATING_METHODS.has((init?.method || 'GET').toUpperCase())) {
+      const body = await response.clone().json().catch(() => ({}));
+      if (body?.error === 'CSRF validation failed') {
+        csrfToken = undefined; // Invalidate cached token
+        const freshToken = await fetchCsrfToken();
+        if (freshToken) {
+          const headers = new Headers(init?.headers);
+          headers.set('X-CSRF-Token', freshToken);
+          return fetch(input, { ...init, headers });
+        }
+      }
+    }
+
+    return response;
+  };
+}
+
 function isFeatureEnabled(feature: keyof MedplumAppConfig): boolean {
   // This try/catch exists to prevent Rollup optimization from removing this function
   try {

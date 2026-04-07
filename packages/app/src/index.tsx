@@ -11,7 +11,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider, createBrowserRouter } from 'react-router';
 import { App } from './App';
-import { getConfig, getEffectiveBaseUrl } from './config';
+import { getConfig, getEffectiveBaseUrl, isGatewayEnabled, createGatewayFetch } from './config';
 import './index.css';
 
 export async function initApp(): Promise<void> {
@@ -24,9 +24,15 @@ export async function initApp(): Promise<void> {
   // Medplum server which validates the HMAC.
   const baseUrl = getEffectiveBaseUrl() || config.baseUrl;
 
+  // When routing through the gateway proxy, wrap fetch to handle CSRF tokens.
+  // The gateway requires X-CSRF-Token on POST/PUT/PATCH/DELETE.
+  const useGatewayProxy = isGatewayEnabled() && baseUrl?.includes('/api/gateway/proxy/');
+  const gatewayFetch = useGatewayProxy ? createGatewayFetch() : undefined;
+
   const medplum = new MedplumClient({
     baseUrl,
     clientId: config.clientId,
+    fetch: gatewayFetch,
     storagePrefix: '@medplum:',
     cacheTime: 60000,
     autoBatchTime: 100,
