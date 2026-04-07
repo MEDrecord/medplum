@@ -6,6 +6,7 @@ import { Logo, useMedplum } from '@medplum/react';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
+import { createGatewayFetch } from './config';
 
 /**
  * HealthTalk Gateway Callback Page
@@ -67,8 +68,9 @@ export function GatewayCallbackPage(): JSX.Element {
       if (webToken) {
         reqBody.webToken = webToken;
       }
-      // credentials:'include' sends the auth.sid cookie to the Medplum server
-      const response = await fetch(`${baseUrl}auth/gateway`, {
+      // Use CSRF-aware fetch for gateway proxy requests
+      const gwFetch = createGatewayFetch();
+      const response = await gwFetch(`${baseUrl}auth/gateway`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
