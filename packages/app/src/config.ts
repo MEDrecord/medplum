@@ -135,18 +135,27 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * going through the gateway proxy. GET/HEAD/OPTIONS pass through unchanged.
  * If a request fails with 403 CSRF, retries once with a fresh token.
  */
+/** Headers that the gateway CORS does not allow -- strip before sending. */
+const DISALLOWED_HEADERS = ['x-medplum'];
+
 export function createGatewayFetch(): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const method = (init?.method || 'GET').toUpperCase();
+    const headers = new Headers(init?.headers);
+
+    // Strip headers the gateway proxy doesn't allow through CORS
+    for (const h of DISALLOWED_HEADERS) {
+      headers.delete(h);
+    }
 
     if (MUTATING_METHODS.has(method)) {
       const token = await getCsrfToken();
       if (token) {
-        const headers = new Headers(init?.headers);
         headers.set('X-CSRF-Token', token);
-        init = { ...init, headers };
       }
     }
+
+    init = { ...init, headers, credentials: 'include' };
 
     const response = await fetch(input, init);
 

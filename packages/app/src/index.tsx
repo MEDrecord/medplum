@@ -33,6 +33,9 @@ export async function initApp(): Promise<void> {
     baseUrl,
     clientId: config.clientId,
     fetch: gatewayFetch,
+    // Disable X-Medplum header when routing through gateway proxy --
+    // the gateway's CORS doesn't allow custom headers in preflight.
+    extendedMode: useGatewayProxy ? false : undefined,
     storagePrefix: '@medplum:',
     cacheTime: 60000,
     autoBatchTime: 100,
