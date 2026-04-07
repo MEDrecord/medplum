@@ -24,15 +24,6 @@ export async function initApp(): Promise<void> {
   // Medplum server which validates the HMAC.
   const baseUrl = getEffectiveBaseUrl() || config.baseUrl;
 
-  console.log('[v0] Gateway config:', {
-    gatewayEnabled: config.gatewayEnabled,
-    isGatewayEnabled: !!baseUrl?.includes('/api/gateway/proxy/'),
-    gatewayUrl: config.gatewayUrl,
-    gatewayServiceName: config.gatewayServiceName,
-    effectiveBaseUrl: baseUrl,
-    originalBaseUrl: config.baseUrl,
-  });
-
   const medplum = new MedplumClient({
     baseUrl,
     clientId: config.clientId,
