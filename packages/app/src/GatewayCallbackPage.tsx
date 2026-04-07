@@ -152,7 +152,7 @@ export function GatewayCallbackPage(): JSX.Element {
   return (
     <Center style={{ minHeight: '100vh' }}>
       <Stack align="center" gap="md">
-        <Logo size={48} />
+        <HealthTalkLogo size={48} />
         <Loader size="lg" color="teal" />
         <Text c="dimmed">{statusMessages[status]}</Text>
       </Stack>
