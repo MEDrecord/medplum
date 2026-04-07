@@ -98,20 +98,16 @@ let csrfToken: string | undefined;
 let csrfFetchPromise: Promise<string | undefined> | undefined;
 
 async function fetchCsrfToken(): Promise<string | undefined> {
-  const gatewayUrl = (config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai').replace(/\/+$/, '');
-  try {
-    const res = await fetch(`${gatewayUrl}/api/auth/csrf`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-    if (res.ok) {
-      const data = await res.json();
-      csrfToken = data.csrfToken || data.token;
-      return csrfToken;
-    }
-  } catch {
-    // CSRF fetch failed, proceed without token
+  // Check if the gateway set a CSRF cookie (non-httpOnly) during sign-in.
+  // The cookie is on .healthtalk.ai so it's readable from fhir-tst.healthtalk.ai.
+  const cookieMatch = document.cookie.match(/(?:^|;\s*)(?:csrf[_-]?token|_csrf)=([^;]*)/i);
+  if (cookieMatch) {
+    csrfToken = decodeURIComponent(cookieMatch[1]);
+    return csrfToken;
   }
+  // No pre-fetch of /api/auth/csrf -- it's cross-origin and fails CORS.
+  // The retry mechanism in createGatewayFetch handles CSRF failures by
+  // extracting the token from the 403 error response body.
   return undefined;
 }
 
@@ -138,7 +134,29 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export function createGatewayFetch(): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const method = (init?.method || 'GET').toUpperCase();
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+
+    // Intercept logout: MedplumClient sends POST /oauth2/logout through the proxy,
+    // but the gateway proxy returns 415. Instead, call the gateway's signout
+    // endpoint directly via redirect to clear the auth.sid session cookie.
+    if (method === 'POST' && url.includes('/oauth2/logout')) {
+      const gatewayUrl = (config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai').replace(/\/+$/, '');
+      // Redirect to gateway signout which clears the session and redirects back
+      window.location.href = `${gatewayUrl}/api/auth/signout?callbackUrl=${encodeURIComponent(window.location.origin + '/signin')}`;
+      // Return a fake 200 so MedplumClient's signOut() doesn't throw
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
     const headers = new Headers(init?.headers);
+
+    // Rewrite FHIR content types to application/json -- the gateway proxy
+    // only allows standard types (application/json, text/plain, etc.) and
+    // rejects application/fhir+json with 415 Unsupported Media Type.
+    // The Medplum server accepts application/json for all FHIR operations.
+    const contentType = headers.get('Content-Type') || '';
+    if (contentType.includes('fhir+json') || contentType.includes('fhir+xml')) {
+      headers.set('Content-Type', contentType.replace(/fhir\+json/g, 'json').replace(/fhir\+xml/g, 'xml'));
+    }
 
     if (MUTATING_METHODS.has(method)) {
       const token = await getCsrfToken();
@@ -151,16 +169,24 @@ export function createGatewayFetch(): typeof fetch {
 
     const response = await fetch(input, init);
 
-    // If CSRF failed, refresh token and retry once
-    if (response.status === 403 && MUTATING_METHODS.has((init?.method || 'GET').toUpperCase())) {
+    // If CSRF failed (403), extract token from response if provided and retry once
+    if (response.status === 403 && MUTATING_METHODS.has(method)) {
       const body = await response.clone().json().catch(() => ({}));
-      if (body?.error === 'CSRF validation failed') {
-        csrfToken = undefined; // Invalidate cached token
-        const freshToken = await fetchCsrfToken();
-        if (freshToken) {
-          const headers = new Headers(init?.headers);
-          headers.set('X-CSRF-Token', freshToken);
-          return fetch(input, { ...init, headers });
+      if (body?.error === 'CSRF validation failed' || body?.message?.includes('CSRF')) {
+        csrfToken = undefined;
+
+        // Some gateways return the expected token in the error response
+        if (body?.csrfToken || body?.token) {
+          csrfToken = body.csrfToken || body.token;
+        } else {
+          // Try fetching fresh token
+          await fetchCsrfToken();
+        }
+
+        if (csrfToken) {
+          const retryHeaders = new Headers(init?.headers);
+          retryHeaders.set('X-CSRF-Token', csrfToken);
+          return fetch(input, { ...init, headers: retryHeaders });
         }
       }
     }
