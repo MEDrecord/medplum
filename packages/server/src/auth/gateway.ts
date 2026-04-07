@@ -109,9 +109,13 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
   }
 
   // --- Step 2: Resolve project ---
-  const projectId = req.body.projectId || config.defaultProjectId;
+  // Priority: explicit body param > config env var > first non-system project from DB
+  let projectId = req.body.projectId || config.defaultProjectId;
   if (!projectId) {
-    sendOutcome(res, badRequest('Project ID is required'));
+    projectId = await resolveDefaultProjectId();
+  }
+  if (!projectId) {
+    sendOutcome(res, badRequest('No project found. Create a project first.'));
     return;
   }
 
@@ -353,4 +357,60 @@ function getLastName(name: string | undefined): string {
     return parts.length > 1 ? parts.slice(1).join(' ') : parts[0];
   }
   return 'User';
+}
+
+/**
+ * Cache for the default project ID so we don't query on every request.
+ */
+let cachedDefaultProjectId: string | undefined;
+
+/**
+ * Resolve the default project from the database.
+ * Finds the first Project resource that is NOT the built-in system/super-admin project.
+ * Caches the result for the lifetime of the process.
+ */
+export async function resolveDefaultProjectId(): Promise<string | undefined> {
+  if (cachedDefaultProjectId) {
+    return cachedDefaultProjectId;
+  }
+
+  try {
+    const systemRepo = getGlobalSystemRepo();
+    // Search for projects, sorted by creation date (oldest first = most likely the main project)
+    const projects = await systemRepo.searchResources<Project>({
+      resourceType: 'Project',
+      count: 10,
+      sortRules: [{ code: '_lastUpdated', descending: false }],
+    });
+
+    // Find the first non-system project (system projects typically have superAdmin=true
+    // or are named "Super Admin" / "Medplum")
+    const defaultProject = projects.find(
+      (p) => !p.superAdmin && p.name !== 'Super Admin' && p.name !== 'Medplum'
+    );
+
+    if (defaultProject?.id) {
+      cachedDefaultProjectId = defaultProject.id;
+      getLogger().info('Gateway: resolved default project from DB', {
+        projectId: defaultProject.id,
+        projectName: defaultProject.name,
+      });
+      return defaultProject.id;
+    }
+
+    // If no non-system project, use the first one available
+    if (projects.length > 0 && projects[0].id) {
+      cachedDefaultProjectId = projects[0].id;
+      getLogger().info('Gateway: using first available project', {
+        projectId: projects[0].id,
+        projectName: projects[0].name,
+      });
+      return projects[0].id;
+    }
+
+    return undefined;
+  } catch (err) {
+    getLogger().warn('Gateway: failed to resolve default project', { error: String(err) });
+    return undefined;
+  }
 }

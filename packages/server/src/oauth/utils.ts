@@ -1287,9 +1287,14 @@ export async function getLoginForGatewayAuth(
   headers: GatewayHeaders
 ): Promise<AuthenticationResult | undefined> {
   const config = getConfig();
-  const projectId = config.defaultProjectId;
+  let projectId = config.defaultProjectId;
+
+  // If no explicit project ID is configured, resolve from DB
   if (!projectId) {
-    getLogger().warn('Gateway auth: defaultProjectId not configured');
+    projectId = await resolveDefaultProjectId();
+  }
+  if (!projectId) {
+    getLogger().warn('Gateway auth: no project found (not configured, none in DB)');
     return undefined;
   }
 
@@ -1401,4 +1406,41 @@ export async function getLoginForGatewayAuth(
 
   // 8. Build auth result using existing makeAuthResult pattern
   return makeAuthResult(globalSystemRepo, req, login, project, membership);
+}
+
+/**
+ * Cache for the default project ID resolved from the database.
+ */
+let _cachedGatewayProjectId: string | undefined;
+
+/**
+ * Resolve the default project from the database.
+ * Finds the first Project resource that is NOT the built-in super-admin project.
+ */
+async function resolveDefaultProjectId(): Promise<string | undefined> {
+  if (_cachedGatewayProjectId) {
+    return _cachedGatewayProjectId;
+  }
+  try {
+    const systemRepo = getGlobalSystemRepo();
+    const projects = await systemRepo.searchResources<Project>({
+      resourceType: 'Project',
+      count: 10,
+      sortRules: [{ code: '_lastUpdated', descending: false }],
+    });
+    const defaultProject = projects.find(
+      (p) => !p.superAdmin && p.name !== 'Super Admin' && p.name !== 'Medplum'
+    );
+    if (defaultProject?.id) {
+      _cachedGatewayProjectId = defaultProject.id;
+      return defaultProject.id;
+    }
+    if (projects.length > 0 && projects[0].id) {
+      _cachedGatewayProjectId = projects[0].id;
+      return projects[0].id;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
