@@ -6,12 +6,12 @@ import type { OperationOutcome } from '@medplum/fhirtypes';
 import {
   Document,
   Form,
-  Logo,
   MedplumLink,
   OperationOutcomeAlert,
   getIssuesForExpression,
   useMedplum,
 } from '@medplum/react';
+import { HealthTalkLogo } from './HealthTalkLogo';
 import type { JSX } from 'react';
 import { useState } from 'react';
 import { useParams } from 'react-router';
@@ -40,7 +40,7 @@ export function VerifyEmailPage(): JSX.Element {
         }}
       >
         <Flex direction="column" align="center" justify="center">
-          <Logo size={32} />
+          <HealthTalkLogo size={32} />
           <Title>Email address verification required</Title>
         </Flex>
         {!success && (

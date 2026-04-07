@@ -25,6 +25,7 @@ import { Suspense } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 import { AppRoutes } from './AppRoutes';
 
+import { HealthTalkLogo } from './HealthTalkLogo';
 import './App.css';
 
 export function App(): JSX.Element {
@@ -39,7 +40,7 @@ export function App(): JSX.Element {
 
   return (
     <AppShell
-      logo={<img src="/healthtalk-logo.png" alt="HealthTalk" width={24} height={24} style={{ borderRadius: 4 }} />}
+      logo={<HealthTalkLogo size={24} />}
       pathname={location.pathname}
       searchParams={searchParams}
       version={MEDPLUM_VERSION}

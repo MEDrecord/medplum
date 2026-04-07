@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Center, Loader, Stack, Text, Title } from '@mantine/core';
 import { showNotification } from '@mantine/notifications';
-import { Logo, useMedplum } from '@medplum/react';
+import { useMedplum } from '@medplum/react';
+import { HealthTalkLogo } from './HealthTalkLogo';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -128,7 +129,7 @@ export function GatewayCallbackPage(): JSX.Element {
     return (
       <Center style={{ minHeight: '100vh' }}>
         <Stack align="center" gap="md">
-          <Logo size={48} />
+          <HealthTalkLogo size={48} />
           <Title order={3} c="red">Authentication Failed</Title>
           <Text c="dimmed">{errorMessage}</Text>
           <Text
