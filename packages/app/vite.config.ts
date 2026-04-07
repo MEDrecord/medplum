@@ -43,6 +43,8 @@ function envOverrides(): Record<string, string> {
       overrides[`import.meta.env.${key}`] = JSON.stringify(process.env[key]);
     }
   }
+  // Always set app name to HealthTalk
+  overrides['import.meta.env.MEDPLUM_APP_NAME'] = JSON.stringify('HealthTalk');
   return overrides;
 }
 

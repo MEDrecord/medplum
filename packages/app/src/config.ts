@@ -18,9 +18,10 @@ export interface MedplumAppConfig {
 const config: MedplumAppConfig = {
   baseUrl: import.meta.env?.MEDPLUM_BASE_URL,
   clientId: import.meta.env?.MEDPLUM_CLIENT_ID,
-  googleClientId: import.meta.env?.GOOGLE_CLIENT_ID,
-  recaptchaSiteKey: import.meta.env?.RECAPTCHA_SITE_KEY,
-  registerEnabled: import.meta.env?.MEDPLUM_REGISTER_ENABLED,
+  // Google login and local registration are disabled -- gateway auth only
+  googleClientId: undefined,
+  recaptchaSiteKey: undefined,
+  registerEnabled: false,
   awsTextractEnabled: import.meta.env?.MEDPLUM_AWS_TEXTRACT_ENABLED,
   // HealthTalk Gateway - uses MEDPLUM_ prefix to match Vite envPrefix
   gatewayUrl: import.meta.env?.MEDPLUM_GATEWAY_URL || 'https://auth-test-b2c.healthtalk.ai',
