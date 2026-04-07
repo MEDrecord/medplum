@@ -135,23 +135,10 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * going through the gateway proxy. GET/HEAD/OPTIONS pass through unchanged.
  * If a request fails with 403 CSRF, retries once with a fresh token.
  */
-/**
- * Headers to strip when routing through the gateway proxy:
- * - x-medplum: Custom header that fails CORS preflight (gateway doesn't list it in Access-Control-Allow-Headers)
- * - authorization: Gateway strips client Bearer tokens and injects its own from the session.
- *   Sending it triggers unnecessary CORS preflight and the gateway ignores it anyway.
- */
-const DISALLOWED_HEADERS = ['x-medplum', 'authorization'];
-
 export function createGatewayFetch(): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const method = (init?.method || 'GET').toUpperCase();
     const headers = new Headers(init?.headers);
-
-    // Strip headers the gateway proxy doesn't allow through CORS
-    for (const h of DISALLOWED_HEADERS) {
-      headers.delete(h);
-    }
 
     if (MUTATING_METHODS.has(method)) {
       const token = await getCsrfToken();
