@@ -28,7 +28,7 @@ import { AssaysPage } from './lab/AssaysPage';
 import { PanelsPage } from './lab/PanelsPage';
 import { MfaPage } from './MfaPage';
 import { OAuthPage } from './OAuthPage';
-import { RegisterPage } from './RegisterPage';
+
 import { ResetPasswordPage } from './ResetPasswordPage';
 import { ApplyPage } from './resource/ApplyPage';
 import { AppsPage } from './resource/AppsPage';
@@ -73,7 +73,7 @@ export function AppRoutes(): JSX.Element {
         <Route path="/resetpassword" element={<ResetPasswordPage />} />
         <Route path="/setpassword/:id/:secret" element={<SetPasswordPage />} />
         <Route path="/verifyemail/:id/:secret" element={<VerifyEmailPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/register" element={<Navigate to="/signin" replace />} />
         <Route path="/changepassword" element={<ChangePasswordPage />} />
         <Route path="/security" element={<SecurityPage />} />
         <Route path="/mfa" element={<MfaPage />} />
