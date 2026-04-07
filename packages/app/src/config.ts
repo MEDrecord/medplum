@@ -98,32 +98,16 @@ let csrfToken: string | undefined;
 let csrfFetchPromise: Promise<string | undefined> | undefined;
 
 async function fetchCsrfToken(): Promise<string | undefined> {
-  // First check if the gateway set a CSRF cookie (non-httpOnly) during sign-in
+  // Check if the gateway set a CSRF cookie (non-httpOnly) during sign-in.
+  // The cookie is on .healthtalk.ai so it's readable from fhir-tst.healthtalk.ai.
   const cookieMatch = document.cookie.match(/(?:^|;\s*)(?:csrf[_-]?token|_csrf)=([^;]*)/i);
   if (cookieMatch) {
     csrfToken = decodeURIComponent(cookieMatch[1]);
     return csrfToken;
   }
-
-  // If no cookie, try fetching from gateway. This is cross-origin
-  // (fhir-tst.healthtalk.ai -> auth-test-b2c.healthtalk.ai) so it
-  // requires the gateway to have our origin in its CORS config.
-  // If CORS blocks it, we proceed without a token and rely on the
-  // retry mechanism to handle CSRF failures.
-  const gatewayUrl = (config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai').replace(/\/+$/, '');
-  try {
-    const res = await fetch(`${gatewayUrl}/api/auth/csrf`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-    if (res.ok) {
-      const data = await res.json();
-      csrfToken = data.csrfToken || data.token;
-      return csrfToken;
-    }
-  } catch {
-    // CORS blocked or network error -- proceed without pre-fetched token
-  }
+  // No pre-fetch of /api/auth/csrf -- it's cross-origin and fails CORS.
+  // The retry mechanism in createGatewayFetch handles CSRF failures by
+  // extracting the token from the 403 error response body.
   return undefined;
 }
 
@@ -164,6 +148,15 @@ export function createGatewayFetch(): typeof fetch {
     }
 
     const headers = new Headers(init?.headers);
+
+    // Rewrite FHIR content types to application/json -- the gateway proxy
+    // only allows standard types (application/json, text/plain, etc.) and
+    // rejects application/fhir+json with 415 Unsupported Media Type.
+    // The Medplum server accepts application/json for all FHIR operations.
+    const contentType = headers.get('Content-Type') || '';
+    if (contentType.includes('fhir+json') || contentType.includes('fhir+xml')) {
+      headers.set('Content-Type', contentType.replace(/fhir\+json/g, 'json').replace(/fhir\+xml/g, 'xml'));
+    }
 
     if (MUTATING_METHODS.has(method)) {
       const token = await getCsrfToken();
