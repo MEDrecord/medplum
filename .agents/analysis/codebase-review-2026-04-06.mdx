@@ -1,0 +1,125 @@
+---
+title: "MEDrecord/medplum Codebase Analysis"
+type: doc
+status: draft
+createdAt: 2026-04-06
+author: agent
+---
+
+# MEDrecord/medplum Codebase Analysis
+
+## Repository Overview
+
+The MEDrecord/medplum repository is a comprehensive healthcare platform built on FHIR (Fast Healthcare Interoperability Resources) standards. The codebase consists of 2,624 files organized across multiple functional areas, demonstrating a mature, production-ready healthcare application with sophisticated capabilities.
+
+## Key Architecture Components
+
+### 1. Gateway Layer (112 files)
+The gateway layer serves as the entry point for the application, handling:
+- Proxy configurations for external service integration
+- CDS (Clinical Decision Support) Hooks implementation
+- Authentication and authorization flows
+- Request routing and tenant isolation
+
+Key files in this area include proxy implementations for healthcare integrations and authentication handlers that maintain multi-tenant security boundaries.
+
+### 2. Patient Management (220 files)
+This area contains comprehensive patient workflows including:
+- Patient intake questionnaires
+- Demographics management
+- Patient records and summaries
+- Patient communication interfaces
+
+The patient management components demonstrate strong FHIR implementation patterns with proper resource modeling.
+
+### 3. Component Library (207 files)
+A rich set of React UI components specifically designed for healthcare applications:
+- Clinical data visualization components
+- Healthcare-specific form elements
+- FHIR resource renderers
+- Mantine UI integration for consistent styling
+
+### 4. Templates (46 files)
+Templates for various healthcare documents and interfaces:
+- CCDA (Consolidated Clinical Document Architecture) templates
+- FHIR resource templates
+- UI layout templates
+- Summary view templates
+
+### 5. API Layer
+The API layer provides FHIR-compliant endpoints with extended operations:
+- Bot deployment and execution endpoints
+- Code system import operations
+- Custom FHIR operations framework
+- Tenant-scoped API access
+
+### 6. Multi-tenant Architecture
+The platform implements a sophisticated multi-tenant design:
+- Organization-scoped access controls
+- Tenant isolation in data access
+- Project-based resource partitioning
+- Role-based access within tenants
+
+## Notable Features
+
+### 1. Bot/Automation Framework
+The platform includes a robust automation system:
+- Serverless function execution for healthcare workflows
+- Asynchronous execution capabilities
+- Bot deployment and management APIs
+- Integration with external systems
+
+### 2. Clinical Decision Support
+CDS Hooks integration allows for:
+- Real-time clinical decision support
+- Integration with external knowledge sources
+- Patient-context aware recommendations
+- Proxy support for secure CDS service communication
+
+### 3. FHIR Implementation
+Comprehensive FHIR R4 implementation with:
+- Resource validation
+- Search capabilities
+- Operations framework
+- Extended operations
+
+### 4. External Integrations
+The platform supports multiple external integrations:
+- Photon pharmacy integration
+- eFax services
+- Eligibility checking
+- External identity providers
+
+### 5. Security Model
+A comprehensive security architecture:
+- Multi-tenant isolation
+- Fine-grained access controls
+- Project membership management
+- Organization-scoped practitioner access
+
+## Technology Stack
+
+- **Frontend**: TypeScript, React, Mantine UI
+- **API**: FHIR-compliant RESTful services
+- **Authentication**: OAuth 2.0 with external IDP support
+- **Data Model**: FHIR R4 resources
+- **Automation**: Bot framework with serverless execution
+
+## Strengths
+
+1. **Standards Compliance**: Strong adherence to FHIR standards for healthcare interoperability
+2. **Component Architecture**: Well-organized, reusable components
+3. **Multi-tenant Design**: Sophisticated security model with proper tenant isolation
+4. **Extensibility**: Bot framework allows for custom workflow automation
+5. **TypeScript Usage**: Consistent type safety throughout the codebase
+
+## Areas for Improvement
+
+1. **Security Hardening**: Further strengthening multi-tenant boundaries
+2. **Performance Optimization**: Opportunities for optimizing the large codebase
+3. **Documentation**: Enhanced documentation for complex integration patterns
+4. **Monitoring**: Improved monitoring for external service dependencies
+
+## Conclusion
+
+The MEDrecord/medplum repository represents a mature, production-ready healthcare platform with sophisticated capabilities. The codebase demonstrates strong engineering practices with consistent TypeScript usage, comprehensive testing, and proper FHIR resource patterns. The multi-tenant architecture and extensive integration capabilities make it suitable for complex healthcare environments.

@@ -136,6 +136,14 @@ export interface MedplumServerConfig {
   /** Optional flag to enable the MCP server beta */
   mcpEnabled?: boolean;
 
+  /** HealthTalk Gateway configuration */
+  gatewayUrl?: string;
+  gatewayEnabled?: boolean;
+  gatewayApiKey?: string;
+  gatewayServiceSecretKey?: string;
+  /** Default project ID for Gateway-authenticated users */
+  defaultProjectId?: string;
+
   /** Optional config for Fission.io bots */
   fission?: MedplumFissionConfig;
 

@@ -45,6 +45,7 @@ import { getLogger, globalLogger } from './logger';
 import { mcpRouter } from './mcp/routes';
 import { maybeAutoRunPendingPostDeployMigration } from './migrations/migration-utils';
 import { initKeys } from './oauth/keys';
+import { gatewayResponseSigner } from './oauth/gateway';
 import { authenticateRequest } from './oauth/middleware';
 import { oauthRouter } from './oauth/routes';
 import { openApiHandler } from './openapi';
@@ -188,6 +189,11 @@ export async function initApp(app: Express, config: MedplumServerConfig): Promis
     app.use(loggingMiddleware);
   }
   app.use(attachRequestContext);
+
+  // Sign responses for Gateway-proxied requests (backward compatible - no-op without Gateway headers)
+  if (config.gatewayEnabled) {
+    app.use(gatewayResponseSigner);
+  }
 
   app.use(rateLimitHandler(config));
   app.use('/fhir/R4/Binary', binaryRouter);

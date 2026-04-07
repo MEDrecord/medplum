@@ -3,7 +3,7 @@
 import { MEDPLUM_VERSION } from '@medplum/core';
 import type { UserConfiguration } from '@medplum/fhirtypes';
 import type { NavbarMenu } from '@medplum/react';
-import { AppShell, Loading, Logo, useMedplum } from '@medplum/react';
+import { AppShell, Loading, useMedplum } from '@medplum/react';
 import {
   IconBrandAsana,
   IconBuilding,
@@ -25,6 +25,7 @@ import { Suspense } from 'react';
 import { useLocation, useSearchParams } from 'react-router';
 import { AppRoutes } from './AppRoutes';
 
+import { HealthTalkLogo } from './HealthTalkLogo';
 import './App.css';
 
 export function App(): JSX.Element {
@@ -39,7 +40,7 @@ export function App(): JSX.Element {
 
   return (
     <AppShell
-      logo={<Logo size={24} />}
+      logo={<HealthTalkLogo size={24} />}
       pathname={location.pathname}
       searchParams={searchParams}
       version={MEDPLUM_VERSION}

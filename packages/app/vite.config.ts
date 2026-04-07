@@ -8,8 +8,13 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import packageJson from './package.json' with { type: 'json' };
 
-if (!existsSync(path.join(__dirname, '.env'))) {
-  copyFileSync(path.join(__dirname, '.env.defaults'), path.join(__dirname, '.env'));
+// Only copy .env.defaults for local dev when no .env exists AND no
+// MEDPLUM_BASE_URL is provided via the process environment (e.g. Vercel).
+// .env.defaults ships localhost:8103 which silently overrides Vercel dashboard
+// env vars because Vite .env files take precedence over process.env.
+const envDefaultsPath = path.join(__dirname, '.env.defaults');
+if (!existsSync(path.join(__dirname, '.env')) && !process.env.MEDPLUM_BASE_URL && existsSync(envDefaultsPath)) {
+  copyFileSync(envDefaultsPath, path.join(__dirname, '.env'));
 }
 
 let gitHash;
@@ -21,8 +26,31 @@ try {
 
 process.env.MEDPLUM_VERSION = packageJson.version + '-' + gitHash;
 
+// When process.env has MEDPLUM_BASE_URL (Vercel, CI), force it into
+// import.meta.env so it cannot be overridden by a stale .env / .env.defaults.
+// Vite's `define` takes precedence over env-file loading.
+const ENV_OVERRIDE_KEYS = [
+  'MEDPLUM_BASE_URL', 'MEDPLUM_CLIENT_ID', 'MEDPLUM_REGISTER_ENABLED',
+  'MEDPLUM_AWS_TEXTRACT_ENABLED', 'MEDPLUM_GATEWAY_URL', 'MEDPLUM_GATEWAY_TENANT_ID',
+  'MEDPLUM_GATEWAY_ENABLED', 'MEDPLUM_GATEWAY_SERVICE_NAME',
+  'GOOGLE_CLIENT_ID', 'GOOGLE_AUTH_ORIGINS', 'RECAPTCHA_SITE_KEY',
+] as const;
+
+function envOverrides(): Record<string, string> {
+  const overrides: Record<string, string> = {};
+  for (const key of ENV_OVERRIDE_KEYS) {
+    if (process.env[key]) {
+      overrides[`import.meta.env.${key}`] = JSON.stringify(process.env[key]);
+    }
+  }
+  // Always set app name to HealthTalk
+  overrides['import.meta.env.MEDPLUM_APP_NAME'] = JSON.stringify('HealthTalk');
+  return overrides;
+}
+
 export default defineConfig({
   envPrefix: ['MEDPLUM_', 'GOOGLE_', 'RECAPTCHA_'],
+  define: envOverrides(),
   plugins: [react()],
   server: {
     port: 3000,

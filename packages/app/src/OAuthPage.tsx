@@ -5,7 +5,8 @@ import { showNotification } from '@mantine/notifications';
 import type { CodeChallengeMethod } from '@medplum/core';
 import { locationUtils, normalizeErrorString } from '@medplum/core';
 import type { ClientApplicationSignInForm } from '@medplum/fhirtypes';
-import { Logo, SignInForm, useMedplum } from '@medplum/react';
+import { SignInForm, useMedplum } from '@medplum/react';
+import { HealthTalkLogo } from './HealthTalkLogo';
 import type { JSX } from 'react';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -81,9 +82,9 @@ export function OAuthPage(): JSX.Element | null {
           {clientInfo?.logo?.url ? (
             <img src={clientInfo?.logo?.url} alt={`Welcome Logo`} height={60} style={{ width: 'auto' }} />
           ) : (
-            <Logo size={32} />
+            <HealthTalkLogo size={32} />
           )}
-          <Title>{clientInfo?.welcomeString ?? 'Sign in to Medplum'}</Title>
+          <Title>{clientInfo?.welcomeString ?? 'Sign in to HealthTalk'}</Title>
         </>
       )}
     </SignInForm>

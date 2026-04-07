@@ -1,0 +1,115 @@
+---
+title: "Security Improvement Recommendations"
+type: doc
+status: draft
+createdAt: 2026-04-06
+author: agent
+---
+
+# Security Improvement Recommendations
+
+Based on the comprehensive codebase analysis of the MEDrecord/medplum repository, the following security improvements are recommended to further strengthen the platform's security posture, particularly around multi-tenant boundaries.
+
+## Multi-tenant Boundary Hardening
+
+### Gateway Authentication Layer
+
+1. **Enhanced Tenant Validation**
+   - Implement additional validation of tenant context in all gateway authentication flows
+   - Add explicit tenant ID verification in the `verifyGatewayAuth` function
+   - Consider adding a middleware that validates tenant context for all API requests
+
+2. **Cross-Tenant Access Prevention**
+   - Review all API routes to ensure proper tenant isolation
+   - Add logging for any attempted cross-tenant access
+   - Implement tenant context in all database queries
+
+### Project Membership Access Controls
+
+1. **Access Parameter Validation**
+   - Audit the `ProjectMembership.access` parameter implementation
+   - Ensure organization references are properly validated during access checks
+   - Implement stricter validation of access policy assignments
+
+2. **Resource Scoping**
+   - Review how resources are scoped to organizations
+   - Ensure all search operations properly filter by tenant context
+   - Add tenant context to all resource creation operations
+
+### Bot Execution Environment
+
+1. **Execution Isolation**
+   - Review isolation between bot executions across tenants
+   - Ensure bot secrets are properly isolated by tenant
+   - Implement additional validation to prevent bots from accessing data outside their tenant context
+
+2. **Secret Management**
+   - Review how bot secrets are stored and accessed
+   - Consider implementing a more robust secret management solution
+   - Add audit logging for all secret access
+
+## Performance Optimization
+
+1. **Code Splitting**
+   - Implement more aggressive code splitting for the frontend applications
+   - Consider lazy loading more components to reduce initial bundle size
+
+2. **API Response Optimization**
+   - Review API response sizes and implement pagination where appropriate
+   - Consider implementing GraphQL for more efficient data fetching
+
+3. **Caching Strategy**
+   - Implement a more comprehensive caching strategy for frequently accessed resources
+   - Consider using a distributed cache for multi-server deployments
+
+## Documentation Enhancements
+
+1. **Integration Patterns**
+   - Create detailed documentation for all external integration patterns
+   - Document security considerations for each integration
+
+2. **Security Model**
+   - Document the multi-tenant security model in detail
+   - Create a security guide for developers working with the platform
+
+3. **API Documentation**
+   - Enhance API documentation with more examples and security considerations
+   - Document tenant context requirements for all API endpoints
+
+## Monitoring Improvements
+
+1. **External Service Dependencies**
+   - Implement health checks for all external service dependencies
+   - Add detailed logging for external service interactions
+   - Create dashboards for monitoring external service performance
+
+2. **Security Monitoring**
+   - Implement monitoring for suspicious access patterns
+   - Add alerts for potential security incidents
+   - Consider implementing a security information and event management (SIEM) solution
+
+3. **Performance Monitoring**
+   - Add detailed performance monitoring for critical paths
+   - Implement tracing for complex operations
+   - Create performance dashboards for key metrics
+
+## Implementation Priority
+
+1. **High Priority (Immediate)**
+   - Gateway authentication enhancements
+   - Project membership access control auditing
+   - Bot execution isolation review
+
+2. **Medium Priority (Next Quarter)**
+   - Performance optimization
+   - Documentation enhancements
+   - External service monitoring improvements
+
+3. **Long-term (Next Year)**
+   - Comprehensive security monitoring solution
+   - Advanced performance optimization
+   - Complete documentation overhaul
+
+## Conclusion
+
+While the MEDrecord/medplum platform demonstrates strong engineering practices and a sophisticated security model, these recommendations will further enhance the platform's security, performance, and maintainability. The multi-tenant architecture is particularly critical for a healthcare platform, and strengthening these boundaries should be the highest priority.
