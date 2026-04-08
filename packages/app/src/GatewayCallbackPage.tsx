@@ -3,6 +3,7 @@
 import { Center, Loader, Stack, Text, Title } from '@mantine/core';
 import { showNotification } from '@mantine/notifications';
 import { useMedplum } from '@medplum/react';
+import { getConfig } from './config';
 import { HealthTalkLogo } from './HealthTalkLogo';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useState } from 'react';
@@ -60,9 +61,10 @@ export function GatewayCallbackPage(): JSX.Element {
       // the gateway proxy). This is the authentication bootstrap call -- the user
       // has a webToken from B2C but no gateway session yet. The gateway proxy
       // would reject this with CSRF 403 because we can't obtain a CSRF token
-      // cross-origin before authentication is complete.
-      // MEDPLUM_BASE_URL points directly to the FHIR server (e.g. fhir-api-tst.healthtalk.ai).
-      const directBaseUrl = (import.meta.env?.MEDPLUM_BASE_URL || medplum.getBaseUrl()).replace(/\/+$/, '');
+      // before authentication is complete.
+      const cfg = getConfig();
+      const directBaseUrl = (cfg.directBaseUrl || cfg.baseUrl || medplum.getBaseUrl()).replace(/\/+$/, '');
+
       const reqBody: Record<string, string> = {};
       if (webToken) {
         reqBody.webToken = webToken;

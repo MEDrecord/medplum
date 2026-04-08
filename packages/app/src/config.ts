@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 export interface MedplumAppConfig {
   baseUrl?: string;
+  /** Original FHIR server URL (before gateway proxy override) */
+  directBaseUrl?: string;
   clientId?: string;
   googleClientId?: string;
   recaptchaSiteKey?: string;
@@ -17,6 +19,7 @@ export interface MedplumAppConfig {
 
 const config: MedplumAppConfig = {
   baseUrl: import.meta.env?.MEDPLUM_BASE_URL,
+  directBaseUrl: import.meta.env?.MEDPLUM_BASE_URL,
   clientId: import.meta.env?.MEDPLUM_CLIENT_ID,
   // Google login and local registration are disabled -- gateway auth only
   googleClientId: undefined,
@@ -99,16 +102,30 @@ let csrfToken: string | undefined;
 let csrfFetchPromise: Promise<string | undefined> | undefined;
 
 async function fetchCsrfToken(): Promise<string | undefined> {
-  // Check if the gateway set a CSRF cookie (non-httpOnly) during sign-in.
-  // The cookie is on .healthtalk.ai so it's readable from fhir-tst.healthtalk.ai.
+  // 1. Check if the gateway set a CSRF cookie (non-httpOnly) during sign-in.
+  //    The cookie is on .healthtalk.ai so it's readable from fhir-tst.healthtalk.ai.
   const cookieMatch = document.cookie.match(/(?:^|;\s*)(?:csrf[_-]?token|_csrf)=([^;]*)/i);
   if (cookieMatch) {
     csrfToken = decodeURIComponent(cookieMatch[1]);
     return csrfToken;
   }
-  // No pre-fetch of /api/auth/csrf -- it's cross-origin and fails CORS.
-  // The retry mechanism in createGatewayFetch handles CSRF failures by
-  // extracting the token from the 403 error response body.
+
+  // 2. Fetch from gateway's CSRF endpoint (cross-origin with credentials).
+  //    Requires the gateway to allow this origin in its CORS config.
+  const gatewayUrl = (config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai').replace(/\/+$/, '');
+  try {
+    const res = await fetch(`${gatewayUrl}/api/auth/csrf`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      csrfToken = data.csrfToken || data.token;
+      return csrfToken;
+    }
+  } catch {
+    // CORS blocked or network error -- fall through to retry mechanism
+  }
   return undefined;
 }
 
