@@ -3,11 +3,11 @@
 import { Center, Loader, Stack, Text, Title } from '@mantine/core';
 import { showNotification } from '@mantine/notifications';
 import { useMedplum } from '@medplum/react';
+import { getConfig } from './config';
 import { HealthTalkLogo } from './HealthTalkLogo';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { createGatewayFetch } from './config';
 
 /**
  * HealthTalk Gateway Callback Page
@@ -57,21 +57,19 @@ export function GatewayCallbackPage(): JSX.Element {
 
       setStatus('authenticating');
 
-      // Call Medplum server's /auth/gateway endpoint.
-      // Auth is resolved server-side in this priority:
-      //   1. webToken in body (cross-domain token exchange)
-      //   2. auth.sid cookie (sent via credentials:'include' -- the gateway
-      //      sets this httpOnly cookie on .healthtalk.ai, and the Medplum
-      //      server at fhir-api-*.healthtalk.ai receives it automatically)
-      // If neither is present, the server returns an error.
-      const baseUrl = medplum.getBaseUrl();
+      // Call the Medplum server's /auth/gateway endpoint DIRECTLY (not through
+      // the gateway proxy). This is the authentication bootstrap call -- the user
+      // has a webToken from B2C but no gateway session yet. The gateway proxy
+      // would reject this with CSRF 403 because we can't obtain a CSRF token
+      // before authentication is complete.
+      const cfg = getConfig();
+      const directBaseUrl = (cfg.directBaseUrl || cfg.baseUrl || medplum.getBaseUrl()).replace(/\/+$/, '');
+
       const reqBody: Record<string, string> = {};
       if (webToken) {
         reqBody.webToken = webToken;
       }
-      // Use CSRF-aware fetch for gateway proxy requests
-      const gwFetch = createGatewayFetch();
-      const response = await gwFetch(`${baseUrl}auth/gateway`, {
+      const response = await fetch(`${directBaseUrl}/auth/gateway`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
