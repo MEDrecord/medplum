@@ -139,6 +139,9 @@ export interface MedplumServerConfig {
   gatewayEnabled?: boolean;
   gatewayApiKey?: string;
   gatewayServiceSecretKey?: string;
+  gatewayClientApiKey?: string;
+  gatewayClientUserId?: string;
+  gatewayClientEmail?: string;
   /** Default project ID for Gateway-authenticated users */
   defaultProjectId?: string;
 

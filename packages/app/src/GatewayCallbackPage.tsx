@@ -3,7 +3,7 @@
 import { Center, Loader, Stack, Text, Title } from '@mantine/core';
 import { showNotification } from '@mantine/notifications';
 import { useMedplum } from '@medplum/react';
-import { getConfig } from './config';
+import { getDirectBaseUrl } from './config';
 import { HealthTalkLogo } from './HealthTalkLogo';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useState } from 'react';
@@ -62,8 +62,7 @@ export function GatewayCallbackPage(): JSX.Element {
       // has a webToken from B2C but no gateway session yet. The gateway proxy
       // would reject this with CSRF 403 because we can't obtain a CSRF token
       // before authentication is complete.
-      const cfg = getConfig();
-      const directBaseUrl = (cfg.directBaseUrl || cfg.baseUrl || medplum.getBaseUrl()).replace(/\/+$/, '');
+      const directBaseUrl = (getDirectBaseUrl() || medplum.getBaseUrl()).replace(/\/+$/, '');
 
       const reqBody: Record<string, string> = {};
       if (webToken) {

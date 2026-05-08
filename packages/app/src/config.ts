@@ -17,9 +17,49 @@ export interface MedplumAppConfig {
   gatewayServiceName?: string;
 }
 
+export function deriveDirectBaseUrlFromConfig(
+  configuredDirectBaseUrl: string | undefined,
+  baseUrl: string | undefined,
+  gatewayUrl: string | undefined,
+  serviceName: string | undefined
+): string | undefined {
+  if (configuredDirectBaseUrl) {
+    return configuredDirectBaseUrl;
+  }
+
+  if (baseUrl && !baseUrl.includes('/api/gateway/proxy/')) {
+    return baseUrl;
+  }
+
+  if (!gatewayUrl || !serviceName) {
+    return baseUrl;
+  }
+
+  try {
+    const gatewayHostname = new URL(gatewayUrl).hostname;
+    const gatewayParts = gatewayHostname.split('.');
+    if (gatewayParts.length >= 2) {
+      return `https://${serviceName}.${gatewayParts.slice(-2).join('.')}/`;
+    }
+  } catch {
+    // Fall through to the original configured base URL.
+  }
+
+  return baseUrl;
+}
+
+function deriveDirectBaseUrl(): string | undefined {
+  return deriveDirectBaseUrlFromConfig(
+    import.meta.env?.MEDPLUM_DIRECT_BASE_URL,
+    import.meta.env?.MEDPLUM_BASE_URL,
+    import.meta.env?.MEDPLUM_GATEWAY_URL,
+    import.meta.env?.MEDPLUM_GATEWAY_SERVICE_NAME || deriveServiceName()
+  );
+}
+
 const config: MedplumAppConfig = {
   baseUrl: import.meta.env?.MEDPLUM_BASE_URL,
-  directBaseUrl: import.meta.env?.MEDPLUM_BASE_URL,
+  directBaseUrl: deriveDirectBaseUrl(),
   clientId: import.meta.env?.MEDPLUM_CLIENT_ID,
   // Google login and local registration are disabled -- gateway auth only
   googleClientId: undefined,
@@ -86,6 +126,10 @@ export function getEffectiveBaseUrl(): string | undefined {
     return `${gw}/api/gateway/proxy/${svc}/`;
   }
   return config.baseUrl;
+}
+
+export function getDirectBaseUrl(): string | undefined {
+  return config.directBaseUrl || config.baseUrl;
 }
 
 export function getGatewaySignInUrl(callbackUrl: string): string {

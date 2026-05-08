@@ -20,6 +20,11 @@ describe('Auth middleware', () => {
 
   beforeAll(async () => {
     const config = await loadTestConfig();
+    const gatewayProject = await createTestProject({ withClient: true });
+    config.gatewayEnabled = true;
+    config.defaultProjectId = gatewayProject.project.id as string;
+    config.gatewayClientApiKey = 'cak_test_auth_middleware';
+    config.gatewayClientEmail = 'gateway-m2m@example.com';
     await initApp(app, config);
     client = await createTestClient();
   });
@@ -77,6 +82,11 @@ describe('Auth middleware', () => {
   test('No auth header', async () => {
     const res = await request(app).get('/fhir/R4/Patient');
     expect(res.header['www-authenticate']).toBeUndefined();
+    expect(res.status).toBe(401);
+  });
+
+  test('HealthTalk origin still requires an authenticated context', async () => {
+    const res = await request(app).get('/fhir/R4/Patient').set('Origin', 'https://app.healthtalk.ai');
     expect(res.status).toBe(401);
   });
 
@@ -215,5 +225,12 @@ describe('Auth middleware', () => {
       .set('Authorization', 'Basic ' + Buffer.from(client.id + ':' + client.secret).toString('base64'));
     expect(res.status).toBe(200);
     expect(res.body.total).toBeGreaterThan(1);
+  });
+
+  test('Machine-to-machine API key auth success', async () => {
+    const res = await request(app)
+      .get('/fhir/R4/Patient')
+      .set('X-Api-Key', getConfig().gatewayClientApiKey as string);
+    expect(res.status).toBe(200);
   });
 });
