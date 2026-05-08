@@ -3,7 +3,7 @@
 import { Center, Loader, Stack, Text, Title } from '@mantine/core';
 import { showNotification } from '@mantine/notifications';
 import { useMedplum } from '@medplum/react';
-import { getDirectBaseUrl } from './config';
+import { getDirectBaseUrl, invalidateCsrfToken } from './config';
 import { HealthTalkLogo } from './HealthTalkLogo';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useState } from 'react';
@@ -83,6 +83,9 @@ export function GatewayCallbackPage(): JSX.Element {
       }
 
       const tokens = await response.json();
+
+      // Invalidate any stale CSRF token — the gateway issues a new one per session.
+      invalidateCsrfToken();
 
       // Set the active login on the Medplum client
       await medplum.setActiveLogin({
