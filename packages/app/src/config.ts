@@ -145,6 +145,12 @@ export function getGatewaySignInUrl(callbackUrl: string): string {
 let csrfToken: string | undefined;
 let csrfFetchPromise: Promise<string | undefined> | undefined;
 
+function setCsrfHeaders(headers: Headers, token: string): void {
+  headers.set('X-CSRF-Token', token);
+  headers.set('X-XSRF-Token', token);
+  headers.set('X-Requested-With', 'XMLHttpRequest');
+}
+
 /**
  * Extracts a CSRF token from any available source:
  *  1. Non-httpOnly CSRF cookie set by the gateway on sign-in
@@ -267,17 +273,20 @@ export function createGatewayFetch(): typeof fetch {
     if (MUTATING_METHODS.has(method)) {
       const token = await getCsrfToken();
       if (token) {
-        headers.set('X-CSRF-Token', token);
+        setCsrfHeaders(headers, token);
       }
     }
 
     init = { ...init, headers, credentials: 'include' };
     const response = await fetch(input, init);
 
-    // On 403, check if it's a CSRF failure and retry once with a fresh token.
+    // On 403 for mutating proxy requests, retry once with a fresh token.
+    // Some gateway paths return an empty or non-JSON 403 even though the
+    // underlying problem is still CSRF validation.
     if (response.status === 403 && MUTATING_METHODS.has(method)) {
       const body = await response.clone().json().catch(() => ({})) as Record<string, unknown>;
-      if (isCsrfError(response.status, body)) {
+      const isGatewayProxyRequest = url.includes('/api/gateway/proxy/');
+      if (isGatewayProxyRequest || isCsrfError(response.status, body)) {
         // Invalidate stale token and try to get a fresh one from the 403 response
         // itself first (fastest), then fall back to a dedicated fetch.
         csrfToken = undefined;
@@ -285,7 +294,7 @@ export function createGatewayFetch(): typeof fetch {
 
         if (freshToken) {
           const retryHeaders = new Headers(headers);
-          retryHeaders.set('X-CSRF-Token', freshToken);
+          setCsrfHeaders(retryHeaders, freshToken);
           return fetch(input, { ...init, headers: retryHeaders });
         }
       }
