@@ -19,6 +19,7 @@ export interface GatewayHeaders {
   tenantId?: string;
   tenantRole?: string;
   authMethod?: string;
+  clientApiKeyId?: string;
   signedPath?: string;
 }
 
@@ -43,6 +44,9 @@ export function extractGatewayHeaders(req: Request): GatewayHeaders | undefined 
     tenantId: req.headers['x-tenant-id'] as string | undefined,
     tenantRole: req.headers['x-tenant-role'] as string | undefined,
     authMethod: req.headers['x-auth-method'] as string | undefined,
+    clientApiKeyId:
+      (req.headers['x-client-api-key-id'] as string | undefined) ||
+      (req.headers['x-api-key-id'] as string | undefined),
     signedPath: req.headers['x-signed-path'] as string | undefined,
   };
 }
