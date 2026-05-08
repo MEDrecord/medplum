@@ -148,7 +148,6 @@ let csrfFetchPromise: Promise<string | undefined> | undefined;
 function setCsrfHeaders(headers: Headers, token: string): void {
   headers.set('X-CSRF-Token', token);
   headers.set('X-XSRF-Token', token);
-  headers.set('X-Requested-With', 'XMLHttpRequest');
 }
 
 /**
