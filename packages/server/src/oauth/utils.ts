@@ -1287,6 +1287,28 @@ export async function getLoginForGatewayAuth(
   headers: GatewayHeaders
 ): Promise<AuthenticationResult | undefined> {
   const config = getConfig();
+  const authMethod = headers.authMethod?.toLowerCase();
+  const clientApiKeyId =
+    headers.clientApiKeyId ||
+    (req.headers['x-client-api-key-id'] as string | undefined) ||
+    (req.headers['x-api-key-id'] as string | undefined);
+
+  let userId = headers.userId;
+  let userEmail = headers.userEmail;
+
+  // Gateway M2M calls can arrive without user headers.
+  // Derive a stable synthetic identity from configured values or API key ID.
+  if ((!userId || !userEmail) && (authMethod === 'client_api_key' || authMethod === 'm2m')) {
+    if (!userId) {
+      userId = config.gatewayClientUserId || (clientApiKeyId ? `gateway-client-${clientApiKeyId}` : '');
+    }
+    if (!userEmail) {
+      userEmail =
+        config.gatewayClientEmail ||
+        (clientApiKeyId ? `gateway-client-${clientApiKeyId}@healthtalk.ai` : 'gateway-m2m@healthtalk.ai');
+    }
+  }
+
   let projectId = config.defaultProjectId;
 
   // If no explicit project ID is configured, resolve from DB
@@ -1298,24 +1320,29 @@ export async function getLoginForGatewayAuth(
     return undefined;
   }
 
-  if (!headers.userId || !headers.userEmail) {
-    getLogger().warn('Gateway auth: missing userId or userEmail in headers');
+  if (!userId || !userEmail) {
+    getLogger().warn('Gateway auth: missing userId or userEmail in headers', {
+      authMethod,
+      clientApiKeyId,
+      hasUserId: !!headers.userId,
+      hasUserEmail: !!headers.userEmail,
+    });
     return undefined;
   }
 
   const globalSystemRepo = getGlobalSystemRepo();
 
   // 1. Try to find existing user by Gateway external ID within the project
-  let user = await getUserByExternalId(globalSystemRepo, headers.userId, projectId);
+  let user = await getUserByExternalId(globalSystemRepo, userId, projectId);
 
   // 2. Fall back to email lookup within the project
   if (!user) {
-    user = await getUserByEmailInProject(headers.userEmail.toLowerCase(), projectId);
+    user = await getUserByEmailInProject(userEmail.toLowerCase(), projectId);
   }
 
   // 3. If no user exists, create one
   if (!user) {
-    const emailPrefix = headers.userEmail.split('@')[0] || 'User';
+    const emailPrefix = userEmail.split('@')[0] || 'User';
     const nameParts = emailPrefix.split(/[._-]/);
     const firstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'User';
     const lastName = nameParts.length > 1
@@ -1326,11 +1353,11 @@ export async function getLoginForGatewayAuth(
       resourceType: 'User',
       firstName,
       lastName,
-      email: headers.userEmail.toLowerCase(),
-      externalId: headers.userId,
+      email: userEmail.toLowerCase(),
+      externalId: userId,
       project: { reference: `Project/${projectId}` },
     });
-    getLogger().info('Gateway auth: created new User', { userId: user.id, email: headers.userEmail });
+    getLogger().info('Gateway auth: created new User', { userId: user.id, email: userEmail });
   }
 
   // 4. Find existing ProjectMembership
@@ -1348,7 +1375,7 @@ export async function getLoginForGatewayAuth(
     const projectSystemRepo = await getProjectSystemRepo(project);
 
     // Parse name from email or Gateway headers
-    const emailPrefix = headers.userEmail.split('@')[0] || 'User';
+    const emailPrefix = userEmail.split('@')[0] || 'User';
     const nameParts = emailPrefix.split(/[._-]/);
     const givenName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'User';
     const familyName = nameParts.length > 1
@@ -1359,11 +1386,11 @@ export async function getLoginForGatewayAuth(
     const practitioner = await projectSystemRepo.createResource<Practitioner>({
       resourceType: 'Practitioner',
       name: [{ given: [givenName], family: familyName }],
-      telecom: [{ system: 'email', value: headers.userEmail.toLowerCase() }],
+      telecom: [{ system: 'email', value: userEmail.toLowerCase() }],
       identifier: [
         {
           system: 'https://healthtalk.ai/gateway/user-id',
-          value: headers.userId,
+          value: userId,
         },
       ],
     });

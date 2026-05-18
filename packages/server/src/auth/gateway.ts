@@ -21,7 +21,7 @@ import { createProfile, createProjectMembership } from './utils';
 /**
  * Gateway user info from HealthTalk Gateway session validation.
  */
-interface GatewayUserInfo {
+export interface GatewayUserInfo {
   id: string;
   email: string;
   name?: string;
@@ -273,7 +273,7 @@ async function exchangeWebToken(
  *
  * Also tries GET /api/user/me for richer user data (name, role, tenantId).
  */
-async function validateSessionViaCookie(gatewayUrl: string, sessionCookie: string): Promise<GatewayUserInfo | undefined> {
+export async function validateSessionViaCookie(gatewayUrl: string, sessionCookie: string): Promise<GatewayUserInfo | undefined> {
   try {
     // Forward the cookie to GET /api/auth/session
     const cookieHeader = `auth.sid=${sessionCookie}`;
