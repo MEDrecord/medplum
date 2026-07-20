@@ -33,6 +33,7 @@ const config: MedplumAppConfig = {
 /**
  * Derive the gateway service name from MEDPLUM_BASE_URL when not explicitly set.
  * e.g. "https://fhir-api-tst.healthtalk.ai/" -> "fhir-api-tst"
+ * @returns The derived service name, or undefined if not determinable.
  */
 function deriveServiceName(): string | undefined {
   try {
@@ -75,6 +76,7 @@ export function isGatewayEnabled(): boolean {
  * httpOnly) is forwarded automatically by the browser.
  *
  * Example: https://auth-test-b2c.healthtalk.ai/api/gateway/proxy/fhir-api-tst/
+ * @returns The effective base URL, or undefined if not configured.
  */
 export function getEffectiveBaseUrl(): string | undefined {
   if (isGatewayEnabled() && config.gatewayServiceName && config.gatewayUrl) {
@@ -131,11 +133,19 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * Creates a fetch wrapper that adds CSRF tokens to mutating requests
  * going through the gateway proxy. GET/HEAD/OPTIONS pass through unchanged.
  * If a request fails with 403 CSRF, retries once with a fresh token.
+ * @returns A fetch-compatible function with gateway middleware.
  */
 export function createGatewayFetch(): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const method = (init?.method || 'GET').toUpperCase();
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    let url: string;
+    if (typeof input === 'string') {
+      url = input;
+    } else if (input instanceof URL) {
+      url = input.href;
+    } else {
+      url = input.url;
+    }
 
     // Intercept logout: MedplumClient sends POST /oauth2/logout through the proxy,
     // but the gateway proxy returns 415. Instead, call the gateway's signout

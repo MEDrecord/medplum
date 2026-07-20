@@ -8,13 +8,21 @@ interface HealthTalkLogoProps {
 }
 
 export function HealthTalkLogo({ size = 32 }: HealthTalkLogoProps): JSX.Element {
+  let borderRadius: number;
+  if (size > 40) {
+    borderRadius = 16;
+  } else if (size > 20) {
+    borderRadius = 8;
+  } else {
+    borderRadius = 4;
+  }
   return (
     <img
       src={healthtalkLogo}
       alt="HealthTalk"
       width={size}
       height={size}
-      style={{ borderRadius: size > 40 ? 16 : size > 20 ? 8 : 4, display: 'block' }}
+      style={{ borderRadius, display: 'block' }}
     />
   );
 }
