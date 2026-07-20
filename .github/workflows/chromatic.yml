@@ -50,7 +50,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build -- --filter=@medplum/react
+        run: npm run build -- --filter=@medplum/react --filter=@medplum/mock
 
       - name: Publish @medplum/react Chromatic
         uses: chromaui/action@bc2d84ad2b60813a67d995c5582d696104a19383 # v13.3.2

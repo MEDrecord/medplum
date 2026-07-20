@@ -3605,7 +3605,7 @@ describe('project-scoped Repository', () => {
       expect(result.entry?.[0]?.resource?.id).toStrictEqual(patient.id);
     }));
 
-  test('_filter with chained search', () =>
+  test('_filter with reverse chained search', () =>
     withTestContext(async () => {
       const patient = await repo.createResource<Patient>({
         resourceType: 'Patient',
