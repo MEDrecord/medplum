@@ -38,7 +38,7 @@
     "@vitejs/plugin-react": "6.0.1",
     "chart.js": "4.5.1",
     "esbuild": "0.27.4",
-    "postcss": "8.5.8",
+    "postcss": "8.5.18",
     "postcss-preset-mantine": "1.18.0",
     "react": "19.2.4",
     "react-chartjs-2": "5.3.1",
