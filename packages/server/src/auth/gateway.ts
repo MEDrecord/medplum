@@ -30,61 +30,64 @@ export interface GatewayUserInfo {
 }
 
 /**
- * The gateway's session cookie, whatever it is called in this environment.
+ * Every cookie that could be the gateway session, best candidate first.
  *
- * WHY THIS IS NOT JUST `auth.sid`
+ * WHY A LIST AND NOT A CHOICE
  *
- * It used to be. The gateway now scopes the name by tenant, and outside production by deployment
- * environment too:
+ * The gateway names its session cookie per tenant, and outside production it also inserts the
+ * deployment environment:
  *
  *   auth.sid.<tenantId>                 production
  *   auth.sid.<vercelEnv>.<tenantId>     preview and development
  *
- * Both are set with Domain=.healthtalk.ai, which is the whole point -- one browser can hold a live
- * session for several tenants at once without them overwriting each other. The consequence for
- * this server is that `req.cookies['auth.sid']` has been undefined since multi-tenancy shipped,
- * so Option B always fell through and sign-in failed with "Invalid or expired Gateway session".
+ * All of them are set with Domain=.healthtalk.ai, so one browser routinely holds several at once:
+ * a production session from one app, a test session from another, a second tenant from a third.
+ * That is the design working, not a fault.
  *
- * WHY AMBIGUITY IS REFUSED RATHER THAN RESOLVED
+ * An earlier version of this picked one and refused when it could not tell them apart. Refusing
+ * was the common case, not the rare one, and it returned the very 400 it was meant to fix.
+ * Guessing is not the alternative -- the fix is to stop deciding here at all. Only the gateway
+ * knows which session ids are real FOR IT, so every candidate is offered to it in turn and the
+ * first it recognises wins. A production session id presented to the test gateway is simply not
+ * found, which is exactly the answer we need and costs one request to learn.
  *
- * A browser signed in to two tenants presents two of these cookies. Picking one would be picking
- * a user, and picking wrong authenticates the wrong person against this server -- the exact
- * failure the per-tenant names exist to prevent. So when more than one candidate matches and
- * nothing identifies which tenant this server belongs to, this returns undefined and the request
- * is refused. Set `gatewayTenantId` to make it unambiguous.
+ * `tenantId` is still honoured, and matters when a browser holds two VALID sessions for the SAME
+ * gateway under different tenants. Then "the first the gateway accepts" would be a coin toss
+ * between two real users, so when it is configured only that tenant's cookies are offered.
  */
-export function findGatewaySessionCookie(
+/**
+ * How many session cookies to offer the gateway before giving up.
+ *
+ * Each one costs a request, and a browser with more than a handful of live gateway sessions is not
+ * a real user. The cap keeps a crowded cookie jar from turning one login into a dozen round trips.
+ */
+const MAX_SESSION_COOKIE_ATTEMPTS = 4;
+
+export function gatewaySessionCookieCandidates(
   cookies: Record<string, string | undefined> | undefined,
   tenantId?: string
-): { name: string; value: string } | undefined {
+): { name: string; value: string }[] {
   if (!cookies) {
-    return undefined;
+    return [];
   }
 
-  const candidates = Object.entries(cookies)
+  const all = Object.entries(cookies)
     .filter(([name, value]) => Boolean(value) && (name === 'auth.sid' || name.startsWith('auth.sid.')))
     .map(([name, value]) => ({ name, value: value as string }));
 
-  if (candidates.length === 0) {
-    return undefined;
-  }
+  // Longest name first: `auth.sid.preview.<tenant>` is more specific than `auth.sid.<tenant>`,
+  // which is more specific than the legacy `auth.sid`. Ties sort by name so the order is stable.
+  const bySpecificity = (a: { name: string }, b: { name: string }): number =>
+    b.name.length - a.name.length || a.name.localeCompare(b.name);
 
-  // The tenant this server serves, when it is configured. Matches both the production shape
-  // (auth.sid.<tenant>) and the suffixed one (auth.sid.preview.<tenant>).
-  if (tenantId) {
-    const mine = candidates.find((c) => c.name === `auth.sid.${tenantId}` || c.name.endsWith(`.${tenantId}`));
-    if (mine) {
-      return mine;
-    }
-  }
+  const legacy = all.filter((c) => c.name === 'auth.sid');
+  const scoped = all.filter((c) => c.name !== 'auth.sid');
 
-  if (candidates.length === 1) {
-    return candidates[0];
-  }
+  const mine = tenantId ? scoped.filter((c) => c.name.endsWith(`.${tenantId}`)) : scoped;
 
-  // Several tenants, and nothing says which is ours. A legacy unscoped cookie is still a
-  // deliberate answer; anything else is a guess, and a guess here is a wrong user.
-  return candidates.find((c) => c.name === 'auth.sid');
+  // The legacy unscoped cookie carries no tenant, so it cannot be another tenant's session and is
+  // safe to keep as a last resort whichever way the filter went.
+  return [...mine.sort(bySpecificity), ...legacy];
 }
 
 /**
@@ -137,11 +140,15 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
   // the browser sends it automatically when the client uses credentials:'include'. We forward it
   // to the gateway's GET /api/auth/session endpoint to get user info.
   if (!userInfo) {
-    const found = findGatewaySessionCookie(req.cookies, config.gatewayTenantId);
+    const candidates = gatewaySessionCookieCandidates(req.cookies, config.gatewayTenantId);
+    for (const candidate of candidates.slice(0, MAX_SESSION_COOKIE_ATTEMPTS)) {
+      userInfo = await validateSessionViaCookie(gatewayUrl, candidate.value, candidate.name);
+      if (userInfo) {
+        break;
+      }
+    }
     const headerSessionId = req.headers['x-session-id'];
-    if (found) {
-      userInfo = await validateSessionViaCookie(gatewayUrl, found.value, found.name);
-    } else if (typeof headerSessionId === 'string' && headerSessionId) {
+    if (!userInfo && typeof headerSessionId === 'string' && headerSessionId) {
       userInfo = await validateSessionViaCookie(gatewayUrl, headerSessionId);
     }
   }
