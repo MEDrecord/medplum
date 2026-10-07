@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
-import type { Resource, WithId } from '@medplum/core';
+import type { WithId } from '@medplum/core';
 import { badRequest, createReference, Operator } from '@medplum/core';
-import type { Encounter, Observation, ObservationComponent, Patient, Project } from '@medplum/fhirtypes';
+import type { Encounter, Observation, ObservationComponent, Patient, Project, Resource } from '@medplum/fhirtypes';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { resolveDefaultProjectId } from '../auth/gateway';
