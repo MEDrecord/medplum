@@ -1,84 +1,101 @@
 // SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
-import { findGatewaySessionCookie } from './gateway';
+import { gatewaySessionCookieCandidates } from './gateway';
 
 const HEALTHTALK = '8d09f1e2-376d-44e0-966c-eb951007e238';
 const ROBIN = '81050330-18de-4a0f-a774-e5e943c9f20a';
 
-describe('findGatewaySessionCookie', () => {
+const names = (c: { name: string }[]): string[] => c.map((x) => x.name);
+
+describe('gatewaySessionCookieCandidates', () => {
   test('Finds the production name', () => {
-    expect(findGatewaySessionCookie({ [`auth.sid.${HEALTHTALK}`]: 'sid-1' })).toEqual({
-      name: `auth.sid.${HEALTHTALK}`,
-      value: 'sid-1',
-    });
+    expect(gatewaySessionCookieCandidates({ [`auth.sid.${HEALTHTALK}`]: 'sid-1' })).toEqual([
+      { name: `auth.sid.${HEALTHTALK}`, value: 'sid-1' },
+    ]);
   });
 
-  /**
-   * The shape that actually broke sign-in: outside production the gateway inserts the deployment
-   * environment, so the test stack's cookie matched nothing this server looked for.
-   */
   test('Finds the preview name, which is what the test stack sets', () => {
-    expect(findGatewaySessionCookie({ [`auth.sid.preview.${HEALTHTALK}`]: 'sid-2' })).toEqual({
-      name: `auth.sid.preview.${HEALTHTALK}`,
-      value: 'sid-2',
-    });
+    expect(gatewaySessionCookieCandidates({ [`auth.sid.preview.${HEALTHTALK}`]: 'sid-2' })).toEqual([
+      { name: `auth.sid.preview.${HEALTHTALK}`, value: 'sid-2' },
+    ]);
   });
 
-  test('Still finds the legacy unscoped name', () => {
-    expect(findGatewaySessionCookie({ 'auth.sid': 'sid-3' })).toEqual({ name: 'auth.sid', value: 'sid-3' });
+  test('Still offers the legacy unscoped name', () => {
+    expect(gatewaySessionCookieCandidates({ 'auth.sid': 'sid-3' })).toEqual([{ name: 'auth.sid', value: 'sid-3' }]);
   });
 
   test('Ignores cookies that are not the gateway session', () => {
-    expect(findGatewaySessionCookie({ csrf_token: 'x', 'auth.state': 'y', other: 'z' })).toBeUndefined();
+    expect(gatewaySessionCookieCandidates({ csrf_token: 'x', 'auth.state': 'y' })).toEqual([]);
   });
 
-  test('Ignores an empty value', () => {
-    expect(findGatewaySessionCookie({ [`auth.sid.${HEALTHTALK}`]: '' })).toBeUndefined();
+  test('Ignores empty values, and missing cookies', () => {
+    expect(gatewaySessionCookieCandidates({ [`auth.sid.${HEALTHTALK}`]: '' })).toEqual([]);
+    expect(gatewaySessionCookieCandidates(undefined)).toEqual([]);
+    expect(gatewaySessionCookieCandidates({})).toEqual([]);
   });
 
-  test('Returns undefined when there are no cookies at all', () => {
-    expect(findGatewaySessionCookie(undefined)).toBeUndefined();
-    expect(findGatewaySessionCookie({})).toBeUndefined();
+  /**
+   * The case that kept returning 400 in a real browser. Both cookies belong to the same tenant --
+   * one issued by the production gateway, one by the test gateway -- and only the gateway being
+   * asked can say which of them it issued. Both must therefore be offered.
+   */
+  describe('when production and test sessions coexist for one tenant', () => {
+    const both = {
+      [`auth.sid.${HEALTHTALK}`]: 'production-session',
+      [`auth.sid.preview.${HEALTHTALK}`]: 'test-session',
+    };
+
+    test('Offers both, most specific first', () => {
+      expect(names(gatewaySessionCookieCandidates(both))).toEqual([
+        `auth.sid.preview.${HEALTHTALK}`,
+        `auth.sid.${HEALTHTALK}`,
+      ]);
+    });
+
+    test('Keeps both when the tenant is configured -- they are the same tenant', () => {
+      expect(gatewaySessionCookieCandidates(both, HEALTHTALK)).toHaveLength(2);
+    });
   });
 
   describe('when the browser holds sessions for several tenants', () => {
-    const twoTenants = {
-      [`auth.sid.${HEALTHTALK}`]: 'healthtalk-session',
-      [`auth.sid.${ROBIN}`]: 'robin-session',
+    const many = {
+      [`auth.sid.preview.${HEALTHTALK}`]: 'healthtalk-session',
+      [`auth.sid.preview.${ROBIN}`]: 'robin-session',
     };
 
-    test('Picks the configured tenant', () => {
-      expect(findGatewaySessionCookie(twoTenants, HEALTHTALK)?.value).toBe('healthtalk-session');
-      expect(findGatewaySessionCookie(twoTenants, ROBIN)?.value).toBe('robin-session');
-    });
-
-    test('Picks the configured tenant through the preview suffix too', () => {
-      const preview = {
-        [`auth.sid.preview.${HEALTHTALK}`]: 'healthtalk-session',
-        [`auth.sid.preview.${ROBIN}`]: 'robin-session',
-      };
-      expect(findGatewaySessionCookie(preview, ROBIN)?.value).toBe('robin-session');
-    });
-
     /**
-     * The security property. Guessing would authenticate whichever user happened to sort first --
-     * precisely what per-tenant cookie names exist to prevent. Refusing produces a failed login,
-     * which is recoverable; the wrong user is not.
+     * The safety property. Two VALID sessions on the same gateway for different tenants would make
+     * "the first the gateway accepts" a coin toss between two real users, so a configured tenant
+     * narrows the field to its own.
      */
-    test('Refuses to guess when nothing says which tenant is ours', () => {
-      expect(findGatewaySessionCookie(twoTenants)).toBeUndefined();
+    test('A configured tenant excludes other tenants entirely', () => {
+      expect(gatewaySessionCookieCandidates(many, HEALTHTALK)).toEqual([
+        { name: `auth.sid.preview.${HEALTHTALK}`, value: 'healthtalk-session' },
+      ]);
+      expect(gatewaySessionCookieCandidates(many, ROBIN)).toEqual([
+        { name: `auth.sid.preview.${ROBIN}`, value: 'robin-session' },
+      ]);
     });
 
-    test('Refuses when the configured tenant is not among them', () => {
-      expect(findGatewaySessionCookie(twoTenants, 'b7c2db39-e8e0-42ec-ada3-80208e106532')).toBeUndefined();
+    test('Without a configured tenant it offers all of them, deterministically ordered', () => {
+      expect(names(gatewaySessionCookieCandidates(many))).toEqual([
+        `auth.sid.preview.${ROBIN}`,
+        `auth.sid.preview.${HEALTHTALK}`,
+      ]);
     });
 
-    test('A legacy unscoped cookie is a deliberate answer, not a guess', () => {
-      expect(findGatewaySessionCookie({ ...twoTenants, 'auth.sid': 'legacy' })?.value).toBe('legacy');
+    test('A configured tenant matching nothing still leaves the legacy cookie', () => {
+      expect(
+        names(gatewaySessionCookieCandidates({ ...many, 'auth.sid': 'legacy' }, 'b7c2db39-e8e0-42ec-ada3-80208e106532'))
+      ).toEqual(['auth.sid']);
     });
 
-    test('But the configured tenant still wins over the legacy cookie', () => {
-      expect(findGatewaySessionCookie({ ...twoTenants, 'auth.sid': 'legacy' }, ROBIN)?.value).toBe('robin-session');
+    test('The legacy cookie is always last -- a fallback, not a preference', () => {
+      expect(names(gatewaySessionCookieCandidates({ ...many, 'auth.sid': 'legacy' }))).toEqual([
+        `auth.sid.preview.${ROBIN}`,
+        `auth.sid.preview.${HEALTHTALK}`,
+        'auth.sid',
+      ]);
     });
   });
 });
