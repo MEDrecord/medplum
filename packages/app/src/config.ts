@@ -57,6 +57,56 @@ function deriveDirectBaseUrl(): string | undefined {
   );
 }
 
+/**
+ * HealthTalk's master tenant ("HealthTalk"), which every Medplum user signs in against.
+ *
+ * It is the same id in test and in production -- that was made true deliberately during the
+ * multi-tenancy work, and both gateways were checked: each answers /api/auth/signin by setting
+ * `auth.state.8d09f1e2-376d-44e0-966c-eb951007e238`. So this is a constant of the platform, not
+ * an environment-specific value, and it does not belong in per-environment configuration.
+ *
+ * It replaces the literal string "default", which looked like configuration but was not: no
+ * tenant has that id any more, so the gateway could not resolve it and quietly fell back to the
+ * master tenant. The result was the same, which is exactly why the dead value survived unnoticed.
+ */
+const HEALTHTALK_MASTER_TENANT_ID = '8d09f1e2-376d-44e0-966c-eb951007e238';
+
+/**
+ * The gateway this build talks to. Throws when it is not configured.
+ *
+ * WHY THIS REFUSES TO GUESS
+ *
+ * Every call site used to fall back to `https://auth-test-b2c.healthtalk.ai`. That hostname reads
+ * like a test host and is not one -- it is an alias of PRODUCTION. So a deployment that simply
+ * forgot to set MEDPLUM_GATEWAY_URL did not fail; it signed its users in against the production
+ * gateway, and nothing in the UI said so.
+ *
+ * That is also what broke sign-in. The gateway scopes its OAuth `state` cookie by tenant and by
+ * deployment environment, on the shared .healthtalk.ai domain. Pointed at the same gateway with
+ * the same tenant, every Medplum environment writes the SAME cookie:
+ *
+ *   auth.state.8d09f1e2-376d-44e0-966c-eb951007e238    Domain=.healthtalk.ai
+ *
+ * Start a sign-in in one tab and a second anywhere else, and the second overwrites the first's
+ * nonce. The first callback then returns with a state the cookie no longer matches and the user
+ * is sent to /auth/error?error=State+mismatch. Giving each environment its own gateway gives it
+ * its own cookie name (the test gateway suffixes `.preview`), and the collision is gone.
+ *
+ * Throwing is the point: a loud failure at sign-in is recoverable in minutes, while a silent
+ * fallback to production is an authentication incident nobody notices.
+ */
+export function getGatewayUrl(): string {
+  const url = config.gatewayUrl;
+  if (!url) {
+    throw new Error(
+      'MEDPLUM_GATEWAY_URL is not set. Configure it per environment ' +
+        '(test: https://authb2c-tst.healthtalk.ai, production: https://authb2c.healthtalk.ai). ' +
+        'It has no default: the previous default pointed at the production gateway.'
+    );
+  }
+  return url.replace(/\/+$/, '');
+}
+
 const config: MedplumAppConfig = {
   baseUrl: import.meta.env?.MEDPLUM_BASE_URL,
   directBaseUrl: deriveDirectBaseUrl(),
@@ -66,9 +116,10 @@ const config: MedplumAppConfig = {
   recaptchaSiteKey: undefined,
   registerEnabled: false,
   awsTextractEnabled: import.meta.env?.MEDPLUM_AWS_TEXTRACT_ENABLED,
-  // HealthTalk Gateway - uses MEDPLUM_ prefix to match Vite envPrefix
-  gatewayUrl: import.meta.env?.MEDPLUM_GATEWAY_URL || 'https://auth-test-b2c.healthtalk.ai',
-  gatewayTenantId: import.meta.env?.MEDPLUM_GATEWAY_TENANT_ID || 'default',
+  // HealthTalk Gateway - uses MEDPLUM_ prefix to match Vite envPrefix.
+  // No fallback host on purpose -- see getGatewayUrl().
+  gatewayUrl: import.meta.env?.MEDPLUM_GATEWAY_URL,
+  gatewayTenantId: import.meta.env?.MEDPLUM_GATEWAY_TENANT_ID || HEALTHTALK_MASTER_TENANT_ID,
   gatewayEnabled: import.meta.env?.MEDPLUM_GATEWAY_ENABLED ?? true,
   gatewayServiceName: import.meta.env?.MEDPLUM_GATEWAY_SERVICE_NAME || deriveServiceName(),
 };
@@ -117,7 +168,7 @@ export function isGatewayEnabled(): boolean {
  * calls are routed through the gateway proxy so the auth.sid cookie (same-domain,
  * httpOnly) is forwarded automatically by the browser.
  *
- * Example: https://auth-test-b2c.healthtalk.ai/api/gateway/proxy/fhir-api-tst/
+ * Example: https://authb2c-tst.healthtalk.ai/api/gateway/proxy/fhir-api-tst/
  */
 export function getEffectiveBaseUrl(): string | undefined {
   if (isGatewayEnabled() && config.gatewayServiceName && config.gatewayUrl) {
@@ -133,8 +184,8 @@ export function getDirectBaseUrl(): string | undefined {
 }
 
 export function getGatewaySignInUrl(callbackUrl: string): string {
-  const gatewayUrl = config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai';
-  const tenantId = config.gatewayTenantId || 'default';
+  const gatewayUrl = getGatewayUrl();
+  const tenantId = config.gatewayTenantId || HEALTHTALK_MASTER_TENANT_ID;
   return `${gatewayUrl}/api/auth/signin?tenantId=${tenantId}&callbackUrl=${encodeURIComponent(callbackUrl)}`;
 }
 
@@ -184,7 +235,11 @@ async function fetchCsrfToken(fromResponse?: Response): Promise<string | undefin
   }
 
   // Fetch from gateway's CSRF endpoint (cross-origin with credentials).
-  const gatewayUrl = (config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai').replace(/\/+$/, '');
+  // No gateway configured means no gateway to ask; the caller treats undefined as "no token".
+  if (!config.gatewayUrl) {
+    return undefined;
+  }
+  const gatewayUrl = getGatewayUrl();
   try {
     const res = await fetch(`${gatewayUrl}/api/auth/csrf`, {
       method: 'GET',
@@ -256,7 +311,7 @@ export function createGatewayFetch(): typeof fetch {
 
     // Intercept logout: route directly to gateway signout to clear auth.sid.
     if (method === 'POST' && url.includes('/oauth2/logout')) {
-      const gatewayUrl = (config.gatewayUrl || 'https://auth-test-b2c.healthtalk.ai').replace(/\/+$/, '');
+      const gatewayUrl = getGatewayUrl();
       window.location.href = `${gatewayUrl}/api/auth/signout?callbackUrl=${encodeURIComponent(window.location.origin + '/signin')}`;
       return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
