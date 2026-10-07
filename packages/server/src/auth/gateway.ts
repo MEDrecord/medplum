@@ -30,6 +30,64 @@ export interface GatewayUserInfo {
 }
 
 /**
+ * The gateway's session cookie, whatever it is called in this environment.
+ *
+ * WHY THIS IS NOT JUST `auth.sid`
+ *
+ * It used to be. The gateway now scopes the name by tenant, and outside production by deployment
+ * environment too:
+ *
+ *   auth.sid.<tenantId>                 production
+ *   auth.sid.<vercelEnv>.<tenantId>     preview and development
+ *
+ * Both are set with Domain=.healthtalk.ai, which is the whole point -- one browser can hold a live
+ * session for several tenants at once without them overwriting each other. The consequence for
+ * this server is that `req.cookies['auth.sid']` has been undefined since multi-tenancy shipped,
+ * so Option B always fell through and sign-in failed with "Invalid or expired Gateway session".
+ *
+ * WHY AMBIGUITY IS REFUSED RATHER THAN RESOLVED
+ *
+ * A browser signed in to two tenants presents two of these cookies. Picking one would be picking
+ * a user, and picking wrong authenticates the wrong person against this server -- the exact
+ * failure the per-tenant names exist to prevent. So when more than one candidate matches and
+ * nothing identifies which tenant this server belongs to, this returns undefined and the request
+ * is refused. Set `gatewayTenantId` to make it unambiguous.
+ */
+export function findGatewaySessionCookie(
+  cookies: Record<string, string | undefined> | undefined,
+  tenantId?: string
+): { name: string; value: string } | undefined {
+  if (!cookies) {
+    return undefined;
+  }
+
+  const candidates = Object.entries(cookies)
+    .filter(([name, value]) => Boolean(value) && (name === 'auth.sid' || name.startsWith('auth.sid.')))
+    .map(([name, value]) => ({ name, value: value as string }));
+
+  if (candidates.length === 0) {
+    return undefined;
+  }
+
+  // The tenant this server serves, when it is configured. Matches both the production shape
+  // (auth.sid.<tenant>) and the suffixed one (auth.sid.preview.<tenant>).
+  if (tenantId) {
+    const mine = candidates.find((c) => c.name === `auth.sid.${tenantId}` || c.name.endsWith(`.${tenantId}`));
+    if (mine) {
+      return mine;
+    }
+  }
+
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+
+  // Several tenants, and nothing says which is ours. A legacy unscoped cookie is still a
+  // deliberate answer; anything else is a guess, and a guess here is a wrong user.
+  return candidates.find((c) => c.name === 'auth.sid');
+}
+
+/**
  * Validators for POST /auth/gateway
  */
 export const gatewayLoginValidator = [
@@ -74,15 +132,17 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
     userInfo = await exchangeWebToken(gatewayUrl, webToken, req.headers.origin || req.headers.referer);
   }
 
-  // Option B: Validate session via auth.sid cookie (same-domain flow).
-  // The gateway sets auth.sid on .healthtalk.ai. Since the Medplum server
-  // is also on .healthtalk.ai, the browser sends this cookie automatically
-  // when the client uses credentials:'include'. We forward it to the
-  // gateway's GET /api/auth/session endpoint to get user info.
+  // Option B: Validate the gateway session cookie (same-domain flow).
+  // The gateway sets it on .healthtalk.ai, and the Medplum server is also on .healthtalk.ai, so
+  // the browser sends it automatically when the client uses credentials:'include'. We forward it
+  // to the gateway's GET /api/auth/session endpoint to get user info.
   if (!userInfo) {
-    const sessionCookie = req.cookies?.['auth.sid'] || req.headers['x-session-id'];
-    if (sessionCookie) {
-      userInfo = await validateSessionViaCookie(gatewayUrl, sessionCookie);
+    const found = findGatewaySessionCookie(req.cookies, config.gatewayTenantId);
+    const headerSessionId = req.headers['x-session-id'];
+    if (found) {
+      userInfo = await validateSessionViaCookie(gatewayUrl, found.value, found.name);
+    } else if (typeof headerSessionId === 'string' && headerSessionId) {
+      userInfo = await validateSessionViaCookie(gatewayUrl, headerSessionId);
     }
   }
 
@@ -273,10 +333,15 @@ async function exchangeWebToken(
  *
  * Also tries GET /api/user/me for richer user data (name, role, tenantId).
  */
-export async function validateSessionViaCookie(gatewayUrl: string, sessionCookie: string): Promise<GatewayUserInfo | undefined> {
+export async function validateSessionViaCookie(
+  gatewayUrl: string,
+  sessionCookie: string,
+  cookieName = 'auth.sid'
+): Promise<GatewayUserInfo | undefined> {
   try {
-    // Forward the cookie to GET /api/auth/session
-    const cookieHeader = `auth.sid=${sessionCookie}`;
+    // Forward the cookie under the NAME IT ARRIVED WITH. The gateway selects a session by cookie
+    // name, so renaming it on the way through is the same as not sending it.
+    const cookieHeader = `${cookieName}=${sessionCookie}`;
     const sessionRes = await fetch(`${gatewayUrl}/api/auth/session`, {
       method: 'GET',
       headers: { Cookie: cookieHeader },

@@ -142,6 +142,14 @@ export interface MedplumServerConfig {
   gatewayClientApiKey?: string;
   gatewayClientUserId?: string;
   gatewayClientEmail?: string;
+  /**
+   * The gateway tenant whose session this server accepts.
+   *
+   * Needed only to disambiguate: the gateway names its session cookie per tenant, so a browser
+   * signed in to more than one tenant presents more than one. Without this, such a request is
+   * refused rather than guessed at -- picking the wrong cookie would authenticate the wrong user.
+   */
+  gatewayTenantId?: string;
   /** Default project ID for Gateway-authenticated users */
   defaultProjectId?: string;
 
