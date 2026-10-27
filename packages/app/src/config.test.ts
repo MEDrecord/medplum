@@ -113,6 +113,12 @@ describe('.env.defaults environment consistency', () => {
     expect(Object.keys(SERVICE_SLUGS)).toContain(env.MEDPLUM_GATEWAY_SERVICE_NAME);
   });
 
+  /**
+   * This checks the three values agree with EACH OTHER. It cannot check they are right for the
+   * branch they sit on, because it has no idea which branch that is -- an all-test .env.defaults
+   * merged onto main passes every assertion here and still breaks production. That gap is what
+   * vite.config.ts guards at build time, using VERCEL_ENV.
+   */
   test('Gateway, FHIR server and service slug are all from the SAME environment', () => {
     const gatewayEnv = GATEWAY_HOSTS[new URL(env.MEDPLUM_GATEWAY_URL).hostname];
     const fhirEnv = FHIR_HOSTS[new URL(env.MEDPLUM_BASE_URL).hostname];
