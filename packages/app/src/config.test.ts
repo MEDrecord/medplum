@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { readFileSync } from 'fs';
 import path from 'path';
+import type * as ConfigModule from './config';
 import { deriveDirectBaseUrlFromConfig } from './config';
 
 describe('App config', () => {
@@ -113,6 +114,12 @@ describe('.env.defaults environment consistency', () => {
     expect(Object.keys(SERVICE_SLUGS)).toContain(env.MEDPLUM_GATEWAY_SERVICE_NAME);
   });
 
+  /**
+   * This checks the three values agree with EACH OTHER. It cannot check they are right for the
+   * branch they sit on, because it has no idea which branch that is -- an all-test .env.defaults
+   * merged onto main passes every assertion here and still breaks production. That gap is what
+   * vite.config.ts guards at build time, using VERCEL_ENV.
+   */
   test('Gateway, FHIR server and service slug are all from the SAME environment', () => {
     const gatewayEnv = GATEWAY_HOSTS[new URL(env.MEDPLUM_GATEWAY_URL).hostname];
     const fhirEnv = FHIR_HOSTS[new URL(env.MEDPLUM_BASE_URL).hostname];
@@ -136,8 +143,12 @@ describe('.env.defaults environment consistency', () => {
  * The module reads `import.meta.env` once, at import time, so the only way to assert what it does
  * with a given configuration is to re-import it. babel-preset-vite rewrites `import.meta.env` to
  * `process.env` under jest, which is what makes this possible.
+ *
+ * @param env - Values to place in the environment for the duration of the load. `undefined`
+ *   deletes the variable, which is how "not configured" is distinguished from "empty".
+ * @returns The freshly loaded config module, read with that environment in place.
  */
-function loadConfigWith(env: Record<string, string | undefined>): typeof import('./config') {
+function loadConfigWith(env: Record<string, string | undefined>): typeof ConfigModule {
   const saved: Record<string, string | undefined> = {};
   for (const [key, value] of Object.entries(env)) {
     saved[key] = process.env[key];
@@ -148,7 +159,7 @@ function loadConfigWith(env: Record<string, string | undefined>): typeof import(
     }
   }
 
-  let loaded: typeof import('./config') | undefined;
+  let loaded: typeof ConfigModule | undefined;
   jest.isolateModules(() => {
     loaded = require('./config');
   });
@@ -161,7 +172,7 @@ function loadConfigWith(env: Record<string, string | undefined>): typeof import(
     }
   }
 
-  return loaded as typeof import('./config');
+  return loaded as typeof ConfigModule;
 }
 
 const TEST_ENV = {
