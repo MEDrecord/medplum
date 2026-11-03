@@ -94,6 +94,8 @@ const HEALTHTALK_MASTER_TENANT_ID = '8d09f1e2-376d-44e0-966c-eb951007e238';
  *
  * Throwing is the point: a loud failure at sign-in is recoverable in minutes, while a silent
  * fallback to production is an authentication incident nobody notices.
+ *
+ * @returns The configured gateway origin.
  */
 export function getGatewayUrl(): string {
   const url = config.gatewayUrl;
@@ -127,6 +129,8 @@ const config: MedplumAppConfig = {
 /**
  * Derive the gateway service name from MEDPLUM_BASE_URL when not explicitly set.
  * e.g. "https://fhir-api-tst.healthtalk.ai/" -> "fhir-api-tst"
+ *
+ * @returns The derived service name, or undefined when MEDPLUM_BASE_URL is unset or unparseable.
  */
 function deriveServiceName(): string | undefined {
   try {
@@ -169,6 +173,8 @@ export function isGatewayEnabled(): boolean {
  * httpOnly) is forwarded automatically by the browser.
  *
  * Example: https://authb2c-tst.healthtalk.ai/api/gateway/proxy/fhir-api-tst/
+ *
+ * @returns The base URL the MedplumClient should use, or undefined to keep its default.
  */
 export function getEffectiveBaseUrl(): string | undefined {
   if (isGatewayEnabled() && config.gatewayServiceName && config.gatewayUrl) {
@@ -206,6 +212,9 @@ function setCsrfHeaders(headers: Headers, token: string): void {
  *  1. Non-httpOnly CSRF cookie set by the gateway on sign-in
  *  2. GET /api/auth/csrf endpoint (cross-origin with credentials)
  *  3. Response body / headers from a previous 403 (passed in as `fromResponse`)
+ *
+ * @param fromResponse - A previous 403 response whose body or headers may carry the token.
+ * @returns The CSRF token, or undefined when no source provided one.
  */
 async function fetchCsrfToken(fromResponse?: Response): Promise<string | undefined> {
   // From a 403 response body or headers (most reliable — gateway sends what it expects)
@@ -290,15 +299,33 @@ function isCsrfError(status: number, body: Record<string, unknown>): boolean {
   if (status !== 403) {
     return false;
   }
-  const err = String(body?.error || '').toLowerCase();
-  const msg = String(body?.message || '').toLowerCase();
+  const err = typeof body?.error === 'string' ? body.error.toLowerCase() : '';
+  const msg = typeof body?.message === 'string' ? body.message.toLowerCase() : '';
   return err.includes('csrf') || msg.includes('csrf') || err.includes('invalid token') || msg.includes('invalid token');
+}
+
+/**
+ * The URL a fetch argument refers to, in any of the three forms fetch accepts.
+ *
+ * @param input - The first argument to fetch.
+ * @returns The request URL as a string.
+ */
+function requestUrlOf(input: RequestInfo | URL): string {
+  if (typeof input === 'string') {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.href;
+  }
+  return input.url;
 }
 
 /**
  * Creates a fetch wrapper that adds CSRF tokens to mutating requests
  * going through the gateway proxy. GET/HEAD/OPTIONS pass through unchanged.
  * Eagerly fetches a token on construction and retries once on 403 CSRF errors.
+ *
+ * @returns A fetch implementation that adds CSRF tokens to mutating gateway requests.
  */
 export function createGatewayFetch(): typeof fetch {
   // Warm the CSRF token immediately so the first mutating request doesn't
@@ -307,7 +334,7 @@ export function createGatewayFetch(): typeof fetch {
 
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const method = (init?.method || 'GET').toUpperCase();
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const url = requestUrlOf(input);
 
     // Intercept logout: route directly to gateway signout to clear auth.sid.
     if (method === 'POST' && url.includes('/oauth2/logout')) {

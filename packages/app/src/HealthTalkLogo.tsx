@@ -7,6 +7,22 @@ interface HealthTalkLogoProps {
   size?: number;
 }
 
+/**
+ * Corner rounding that stays proportional as the logo scales.
+ *
+ * @param size - Rendered width and height in pixels.
+ * @returns The border radius in pixels.
+ */
+function borderRadiusFor(size: number): number {
+  if (size > 40) {
+    return 16;
+  }
+  if (size > 20) {
+    return 8;
+  }
+  return 4;
+}
+
 export function HealthTalkLogo({ size = 32 }: HealthTalkLogoProps): JSX.Element {
   return (
     <img
@@ -14,7 +30,7 @@ export function HealthTalkLogo({ size = 32 }: HealthTalkLogoProps): JSX.Element 
       alt="HealthTalk"
       width={size}
       height={size}
-      style={{ borderRadius: size > 40 ? 16 : size > 20 ? 8 : 4, display: 'block' }}
+      style={{ borderRadius: borderRadiusFor(size), display: 'block' }}
     />
   );
 }

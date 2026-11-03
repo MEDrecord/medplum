@@ -25,14 +25,20 @@ if (!existsSync(path.join(__dirname, '.env')) && !process.env.MEDPLUM_BASE_URL &
  */
 const PRODUCTION_GATEWAY_HOST = 'authb2c.healthtalk.ai';
 
-/** Read one key out of a dotenv-style file, without pulling in a parser. */
+/**
+ * Read one key out of a dotenv-style file, without pulling in a parser.
+ *
+ * @param file - Path to the dotenv-style file.
+ * @param key - Name of the variable to look up.
+ * @returns The value, or undefined when the file or the key is absent.
+ */
 function readEnvFileValue(file: string, key: string): string | undefined {
   if (!existsSync(file)) {
     return undefined;
   }
   for (const line of readFileSync(file, 'utf-8').split('\n')) {
     const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
-    if (match && match[1] === key) {
+    if (match?.[1] === key) {
       return match[2].trim().replace(/^["']|["']$/g, '');
     }
   }
