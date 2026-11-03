@@ -161,6 +161,10 @@ function loadConfigWith(env: Record<string, string | undefined>): typeof ConfigM
 
   let loaded: typeof ConfigModule | undefined;
   jest.isolateModules(() => {
+    // jest.isolateModules needs a SYNCHRONOUS require so the module is re-evaluated against
+    // the environment patched just above. A static import is hoisted and evaluated once,
+    // before any of that runs, which is what this test exists to vary.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above
     loaded = require('./config');
   });
 
