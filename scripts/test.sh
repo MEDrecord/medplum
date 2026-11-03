@@ -22,7 +22,12 @@ SHOULD_RUN_SEED_TEST=$(date) time npx turbo run test:seed --filter=./packages/se
 cp "packages/server/coverage/coverage-final.json" "coverage/packages/coverage-server-seed.json"
 
 # Build
-npm run build
+#
+# `npm run build` at the root builds ONLY packages/app -- it is the Vercel deploy command.
+# Using it here left every workspace package without a dist, so the tests below could not
+# resolve @medplum/hl7 or @medplum/mock and ten suites in packages/agent failed to run at
+# all. They reported as test failures, which pointed at the tests rather than at the build.
+npm run build:all
 
 # Test
 # Run them separately because code coverage is resource intensive
