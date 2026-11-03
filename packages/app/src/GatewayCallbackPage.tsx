@@ -16,6 +16,8 @@ import { useNavigate, useSearchParams } from 'react-router';
  * Sends the webToken to the Medplum server's /auth/gateway endpoint,
  * which handles all server-side work (token exchange, user/practitioner provisioning).
  * Then sets the returned Medplum tokens on the client.
+ *
+ * @returns The callback page element.
  */
 export function GatewayCallbackPage(): JSX.Element {
   const navigate = useNavigate();
@@ -35,7 +37,7 @@ export function GatewayCallbackPage(): JSX.Element {
       // If user already has an active login, just redirect
       if (medplum.getActiveLogin()) {
         const nextUrl = searchParams.get('next');
-        navigate(nextUrl?.startsWith('/') ? nextUrl : '/', { replace: true });
+        void navigate(nextUrl?.startsWith('/') ? nextUrl : '/', { replace: true });
         return;
       }
 
@@ -50,7 +52,7 @@ export function GatewayCallbackPage(): JSX.Element {
         const storedToken = sessionStorage.getItem('gateway.lastWebToken');
         if (storedToken === webToken && medplum.getActiveLogin()) {
           const nextUrl = searchParams.get('next');
-          navigate(nextUrl?.startsWith('/') ? nextUrl : '/', { replace: true });
+          void navigate(nextUrl?.startsWith('/') ? nextUrl : '/', { replace: true });
           return;
         }
       }
@@ -108,7 +110,7 @@ export function GatewayCallbackPage(): JSX.Element {
       });
 
       const nextUrl = searchParams.get('next');
-      navigate(nextUrl?.startsWith('/') ? nextUrl : '/', { replace: true });
+      void navigate(nextUrl?.startsWith('/') ? nextUrl : '/', { replace: true });
     } catch (err) {
       console.error('[Gateway] Callback error:', err);
       setStatus('error');
@@ -122,7 +124,7 @@ export function GatewayCallbackPage(): JSX.Element {
   }, [searchParams, medplum, navigate]);
 
   useEffect(() => {
-    handleCallback();
+    void handleCallback();
   }, [handleCallback]);
 
   if (status === 'error') {
