@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
+import { calculateAgeString } from '@medplum/core';
 import { HomerSimpson, MockClient } from '@medplum/mock';
 import * as medplumReact from '@medplum/react';
 import { MedplumProvider } from '@medplum/react';
@@ -128,7 +129,11 @@ describe('PatientPage', () => {
     await waitFor(() => {
       expect(patientSummarySpy).toHaveBeenCalled();
       expect(screen.getByText('Male')).toBeInTheDocument();
-      expect(screen.getByText('1956-05-12 (069Y)')).toBeInTheDocument();
+      // Derived, not hardcoded: PatientSummary renders `${birthDate} (${calculateAgeString(birthDate)})`,
+      // so a literal age goes stale on the patient's next birthday. '069Y' did exactly that when Homer
+      // turned 70 on 2026-05-12, and nothing caught it because this suite was unreachable in CI.
+      const birthDate = HomerSimpson.birthDate as string;
+      expect(screen.getByText(`${birthDate} (${calculateAgeString(birthDate)})`)).toBeInTheDocument();
     });
   });
 
