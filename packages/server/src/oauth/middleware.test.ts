@@ -20,12 +20,18 @@ describe('Auth middleware', () => {
 
   beforeAll(async () => {
     const config = await loadTestConfig();
-    const gatewayProject = await createTestProject({ withClient: true });
     config.gatewayEnabled = true;
-    config.defaultProjectId = gatewayProject.project.id as string;
     config.gatewayClientApiKey = 'cak_test_auth_middleware';
     config.gatewayClientEmail = 'gateway-m2m@example.com';
     await initApp(app, config);
+
+    // createTestProject has to run after initApp. It writes FHIR resources, and the data type
+    // schemas that needs are only indexed while initApp starts up -- calling it first fails with
+    // "Unknown data type: Project". defaultProjectId is read per request, not at startup, so
+    // setting it afterwards still takes effect.
+    const gatewayProject = await createTestProject({ withClient: true });
+    config.defaultProjectId = gatewayProject.project.id as string;
+
     client = await createTestClient();
   });
 
