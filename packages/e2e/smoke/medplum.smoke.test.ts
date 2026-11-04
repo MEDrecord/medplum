@@ -4,7 +4,34 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
 import path from 'node:path';
 
-test.describe('Medplum App Smoke Tests', () => {
+/**
+ * SKIPPED IN THIS FORK -- these test a sign-in flow the app no longer has.
+ *
+ * Every test here drives Medplum's local sign-in form: fill name@domain.com, Continue, type a
+ * password, Sign In, and follow a "Register" link. This fork replaced all of that with HealthTalk
+ * gateway auth. packages/app/src/SignInPage.tsx renders no form at all -- it redirects:
+ *
+ *   window.location.href = gatewayUrl;
+ *
+ * and `registerEnabled` is hardcoded false in config.ts ("Google login and local registration are
+ * disabled -- gateway auth only"). The email field, the password field and the Register link do
+ * not exist, and no configuration brings them back.
+ *
+ * The failure reads as a routing bug -- the app sits on /Patient where the test expects /signin --
+ * which points the first reader in the wrong direction. It is not: the app is simply past a
+ * sign-in step that no longer happens locally.
+ *
+ * Nothing regressed here. These never ran: the workflow template was invalid, so the job was
+ * rejected before its first step. Fixing that is what made this visible.
+ *
+ * Skipped rather than deleted -- the file records what smoke coverage used to exist and is the
+ * starting point for rewriting it against the gateway flow. That rewrite needs a reachable gateway
+ * and test credentials in CI, which is a decision about test infrastructure, not a fix.
+ *
+ * A check that cannot pass is worse than one honestly skipped: a permanently red job is how the
+ * earlier production break went unnoticed.
+ */
+test.describe.skip('Medplum App Smoke Tests', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('http://localhost:3000');
   });

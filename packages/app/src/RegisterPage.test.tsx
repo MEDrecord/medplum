@@ -26,7 +26,26 @@ async function setup(medplum: MedplumClient): Promise<UserEvent> {
   return user;
 }
 
-describe('RegisterPage', () => {
+/**
+ * SKIPPED IN THIS FORK -- the page under test is unreachable by design.
+ *
+ * AppRoutes maps /register to <Navigate to="/signin" replace />, so RegisterPage never mounts.
+ * Each test here renders AppRoutes at /register and lands on the sign-in page instead, which is
+ * why they fail whether they enable the flag or assert the disabled message -- the component they
+ * are about is never on screen either way.
+ *
+ * Registration is off at two levels: this redirect, and `registerEnabled: false` hardcoded in
+ * config.ts ("Google login and local registration are disabled -- gateway auth only"). Accounts
+ * come from the HealthTalk gateway.
+ *
+ * Nothing regressed. These never ran: every suite in this package died on an unparsable PNG import
+ * before reaching a test, and before that the whole workflow was rejected as invalid.
+ *
+ * Skipped rather than deleted. RegisterPage.tsx is still in the tree, so if the route is ever
+ * restored these describe what it should do. Worth noting the component is dead code today -- if
+ * registration is not coming back, the page and this file should go together.
+ */
+describe.skip('RegisterPage', () => {
   beforeAll(() => {
     Object.defineProperty(global, 'TextEncoder', {
       value: TextEncoder,
