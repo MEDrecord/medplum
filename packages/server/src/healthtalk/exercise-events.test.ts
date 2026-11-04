@@ -57,11 +57,13 @@ describe('Exercise Events Routes', () => {
 
   beforeAll(async () => {
     const config = await loadTestConfig();
-    const testProject = await createTestProject();
     config.gatewayApiKey = GATEWAY_API_KEY;
     config.gatewayServiceSecretKey = GATEWAY_SECRET;
-    config.defaultProjectId = testProject.project.id as string;
     await initApp(app, config);
+
+    // createTestProject has to run after initApp -- see the note in oauth/middleware.test.ts.
+    const testProject = await createTestProject();
+    config.defaultProjectId = testProject.project.id as string;
   });
 
   afterAll(async () => {
