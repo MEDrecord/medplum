@@ -1,3 +1,4 @@
 {
+  "ignoreCommand": "bash -c 'case \"$VERCEL_GIT_COMMIT_REF\" in test|acceptance) exit 1;; esac; if [ \"$VERCEL_ENV\" = \"production\" ] || [ -n \"$VERCEL_GIT_PULL_REQUEST_ID\" ]; then exit 1; fi; exit 0'",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
