@@ -13,7 +13,23 @@ import { act, fireEvent, render, screen } from './test-utils/render';
 // logged out
 const medplum = new MockClient({ profile: null });
 
-describe('SignInPage', () => {
+/**
+ * SKIPPED IN THIS FORK -- these test a sign-in form the app no longer renders.
+ *
+ * These look for "Sign in to Medplum", an "Email *" label, a password field, "Forgot password" and
+ * a "Register" link. SignInPage.tsx renders none of them. It shows a branded page whose only
+ * control is a "Sign in with HealthTalk Gateway" button, and credentials are collected by the
+ * gateway rather than by this app.
+ *
+ * Nothing regressed. These never ran: every suite in this package died on an unparsable PNG import
+ * before reaching a test, and before that the whole workflow was rejected as invalid. Fixing those
+ * two things is what made these visible.
+ *
+ * Skipped rather than deleted -- the file is the starting point for tests of the flow that
+ * replaced this one: that the button targets the gateway with the right callback, and that an
+ * already-signed-in profile redirects. Writing those is worth doing on its own.
+ */
+describe.skip('SignInPage', () => {
   function setup(url = '/signin', medplumClient: MedplumClient = medplum): void {
     render(
       <MemoryRouter initialEntries={[url]} initialIndex={0}>
