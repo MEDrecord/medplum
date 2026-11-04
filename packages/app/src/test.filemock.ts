@@ -1,3 +1,4 @@
+// SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
 
 /**
@@ -8,14 +9,14 @@
  *
  *   SyntaxError: packages/app/src/assets/healthtalk-logo.png: Unexpected character '?'. (1:0)
  *
- * That failure is not confined to the importing file. HealthTalkLogo and SignInPage import the
+ * The failure was not confined to the importing file. HealthTalkLogo and SignInPage import the
  * logo, almost every page reaches one of them, and a module that throws while loading fails the
  * whole suite -- so one unparsable PNG took out 60 of 64 suites in this package.
  *
  * The export is a string because that is what the real import evaluates to: components use it as
  * an `src`, so a string keeps assertions about `src` meaningful rather than yielding `undefined`.
  *
- * This file is outside `src` on purpose. `collectCoverageFrom` is `**\/src\/**\/*`, and a test
- * fixture counted as uncovered production code would understate coverage.
+ * Lives in `src` alongside test.setup.ts, the package's other Jest-only file. Outside `src` it
+ * would sit beyond the TypeScript project and the lint config that go with it.
  */
-module.exports = 'test-file-stub';
+export default 'test-file-stub';
