@@ -84,6 +84,11 @@ exerciseEventsRouter.post('/', async (req: Request, res: Response) => {
 
   const config = getConfig();
   const projectId = gatewayHeaders.tenantId || config.defaultProjectId || (await resolveDefaultProjectId());
+  getLogger().info('Resolved project for exercise event', {
+    tenantId: gatewayHeaders.tenantId,
+    defaultProjectId: config.defaultProjectId,
+    projectId,
+  });
   if (!projectId) {
     sendOutcome(res, badRequest('No project configured for exercise event storage'));
     return;
