@@ -111,9 +111,9 @@ exerciseEventsRouter.post('/', async (req: Request, res: Response) => {
   } catch (err) {
     getLogger().error('Failed to store exercise event', {
       error: err,
-      tenantId: gatewayHeaders.tenantId,
-      defaultProjectId: config.defaultProjectId,
-      projectId,
+      gatewayTenantId: gatewayHeaders.tenantId,
+      configDefaultProjectId: config.defaultProjectId,
+      resolvedProjectId: projectId,
     });
     sendOutcome(res, badRequest('Failed to store exercise event'));
   }
