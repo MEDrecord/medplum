@@ -94,13 +94,26 @@ exerciseEventsRouter.post('/', async (req: Request, res: Response) => {
     const project = await globalSystemRepo.readResource<Project>('Project', projectId);
     const repo = await getProjectSystemRepo(project);
 
-    const patient = await upsertByIdentifier(repo, createPatient(athlete), ATHLETE_ID_SYSTEM, String(athlete.id));
-    const encounter = await upsertByIdentifier(repo, createEncounter(event), EVENT_ID_SYSTEM, String(event.id));
+    const patient = await upsertByIdentifier(
+      repo,
+      createPatient(athlete),
+      ATHLETE_ID_SYSTEM,
+      String(athlete.id),
+      projectId
+    );
+    const encounter = await upsertByIdentifier(
+      repo,
+      createEncounter(event),
+      EVENT_ID_SYSTEM,
+      String(event.id),
+      projectId
+    );
     const observation = await upsertByIdentifier(
       repo,
       createObservation(statistic, patient, encounter),
       STATISTIC_ID_SYSTEM,
-      String(statistic.id)
+      String(statistic.id),
+      projectId
     );
 
     getLogger().info('Stored exercise event', {
@@ -128,17 +141,21 @@ async function upsertByIdentifier<T extends Resource>(
   repo: SystemRepository,
   resource: T,
   system: string,
-  value: string
+  value: string,
+  projectId: string
 ): Promise<WithId<T>> {
   const existing = await repo.searchOne<T>({
     resourceType: resource.resourceType,
-    filters: [{ code: 'identifier', operator: Operator.EQUALS, value: `${system}|${value}` }],
+    filters: [
+      { code: 'identifier', operator: Operator.EQUALS, value: `${system}|${value}` },
+      { code: '_project', operator: Operator.EQUALS, value: projectId },
+    ],
   });
 
   if (existing) {
     return repo.updateResource({ ...resource, id: existing.id });
   }
-  return repo.createResource(resource);
+  return repo.createResource({ ...resource, meta: { ...resource.meta, project: projectId } });
 }
 
 function createPatient(athlete: Athlete): Patient {
