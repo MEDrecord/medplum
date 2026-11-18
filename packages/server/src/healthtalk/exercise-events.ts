@@ -103,6 +103,16 @@ exerciseEventsRouter.post('/', async (req: Request, res: Response) => {
       String(statistic.id)
     );
 
+    getLogger().info('Stored exercise event', {
+      resolvedProjectId: projectId,
+      athleteId: String(athlete.id),
+      eventId: String(event.id),
+      statisticId: String(statistic.id),
+      patientId: patient.id,
+      encounterId: encounter.id,
+      observationId: observation.id,
+    });
+
     res.status(200).json({
       patient: { id: patient.id },
       encounter: { id: encounter.id },
