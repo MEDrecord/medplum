@@ -83,7 +83,7 @@ exerciseEventsRouter.post('/', async (req: Request, res: Response) => {
   }
 
   const config = getConfig();
-  const projectId = gatewayHeaders.tenantId || config.defaultProjectId || (await resolveDefaultProjectId());
+  const projectId = config.defaultProjectId || (await resolveDefaultProjectId());
   if (!projectId) {
     sendOutcome(res, badRequest('No project configured for exercise event storage'));
     return;
@@ -109,12 +109,7 @@ exerciseEventsRouter.post('/', async (req: Request, res: Response) => {
       observation: { id: observation.id },
     });
   } catch (err) {
-    getLogger().error('Failed to store exercise event', {
-      error: err,
-      gatewayTenantId: gatewayHeaders.tenantId,
-      configDefaultProjectId: config.defaultProjectId,
-      resolvedProjectId: projectId,
-    });
+    getLogger().error('Failed to store exercise event', { error: err, resolvedProjectId: projectId });
     sendOutcome(res, badRequest('Failed to store exercise event'));
   }
 });
