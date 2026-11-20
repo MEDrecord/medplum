@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { WithId } from '@medplum/core';
 import { badRequest, Operator } from '@medplum/core';
-import type { Device, Observation, ObservationComponent, Project, Resource } from '@medplum/fhirtypes';
+import type { Device, Encounter, Observation, ObservationComponent, Project, Resource } from '@medplum/fhirtypes';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { resolveDefaultProjectId } from '../auth/gateway';
@@ -14,6 +14,7 @@ import { getLogger } from '../logger';
 import { validateGatewayRequest } from '../oauth/gateway';
 
 const MOX_SERIAL_SYSTEM = 'https://healthtalk.ai/fhir/identifiers/mox-serial';
+const MOX_SESSION_SYSTEM = 'https://healthtalk.ai/fhir/identifiers/mox-session';
 const MOX_MEASUREMENT_SYSTEM = 'https://healthtalk.ai/fhir/identifiers/mox-measurement';
 
 const UCUM_SYSTEM = 'http://unitsofmeasure.org';
@@ -64,22 +65,47 @@ moxActivityRouter.post('/', async (req: Request, res: Response) => {
     const project = await globalSystemRepo.readResource<Project>('Project', projectId);
     const repo = await getProjectSystemRepo(project);
 
-    const observationIds: string[] = [];
     for (const record of records) {
       if (!record.MoxName || !record.MeasurementId || record.Day === undefined) {
         sendOutcome(res, badRequest('Each record requires MoxName, MeasurementId, and Day'));
         return;
       }
+    }
 
-      const device = await upsertByIdentifier(repo, createDevice(record), MOX_SERIAL_SYSTEM, record.MoxName, projectId);
-      const observation = await upsertByIdentifier(
+    const sessions = new Map<string, MoxActivityRecord[]>();
+    for (const record of records) {
+      const sessionRecords = sessions.get(record.MeasurementId) ?? [];
+      sessionRecords.push(record);
+      sessions.set(record.MeasurementId, sessionRecords);
+    }
+
+    const observationIds: string[] = [];
+    for (const sessionRecords of sessions.values()) {
+      const device = await upsertByIdentifier(
         repo,
-        createObservation(record, device),
-        MOX_MEASUREMENT_SYSTEM,
-        `${record.MeasurementId}-${record.Day}`,
+        createDevice(sessionRecords[0]),
+        MOX_SERIAL_SYSTEM,
+        sessionRecords[0].MoxName,
         projectId
       );
-      observationIds.push(observation.id);
+      const encounter = await upsertByIdentifier(
+        repo,
+        createEncounter(sessionRecords),
+        MOX_SESSION_SYSTEM,
+        sessionRecords[0].MeasurementId,
+        projectId
+      );
+
+      for (const record of sessionRecords) {
+        const observation = await upsertByIdentifier(
+          repo,
+          createObservation(record, device, encounter),
+          MOX_MEASUREMENT_SYSTEM,
+          `${record.MeasurementId}-${record.Day}`,
+          projectId
+        );
+        observationIds.push(observation.id);
+      }
     }
 
     getLogger().info('Stored Mox activity records', {
@@ -124,7 +150,19 @@ function createDevice(record: MoxActivityRecord): Device {
   };
 }
 
-function createObservation(record: MoxActivityRecord, device: WithId<Device>): Observation {
+function createEncounter(sessionRecords: MoxActivityRecord[]): Encounter {
+  const timestamps = sessionRecords.map((r) => r.Timestamp).sort();
+
+  return {
+    resourceType: 'Encounter',
+    status: 'finished',
+    class: { system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode', code: 'HH', display: 'home health' },
+    identifier: [{ system: MOX_SESSION_SYSTEM, value: sessionRecords[0].MeasurementId }],
+    period: { start: timestamps[0], end: timestamps[timestamps.length - 1] },
+  };
+}
+
+function createObservation(record: MoxActivityRecord, device: WithId<Device>, encounter: WithId<Encounter>): Observation {
   const component: ObservationComponent[] = [
     { code: { text: 'SedentaryinSeconds' }, valueQuantity: { value: record.SedentaryinSeconds, unit: 's', system: UCUM_SYSTEM, code: 's' } },
     { code: { text: 'StandingInSeconds' }, valueQuantity: { value: record.StandingInSeconds, unit: 's', system: UCUM_SYSTEM, code: 's' } },
@@ -147,6 +185,7 @@ function createObservation(record: MoxActivityRecord, device: WithId<Device>): O
     effectiveDateTime: record.Timestamp,
     subject: { reference: `Device/${device.id}` },
     device: { reference: `Device/${device.id}` },
+    encounter: { reference: `Encounter/${encounter.id}` },
     component,
   };
 }
