@@ -26,6 +26,7 @@ interface ExerciseEvent {
   start_dt: string;
   end_dt: string;
   type_label: string;
+  name?: string;
 }
 
 interface Athlete {
@@ -183,6 +184,7 @@ function createEncounter(exerciseEvent: ExerciseEvent): Encounter {
     class: { system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode', code: 'AMB', display: 'ambulatory' },
     identifier: [{ system: EVENT_ID_SYSTEM, value: String(exerciseEvent.id) }],
     type: exerciseEvent.type_label ? [{ text: exerciseEvent.type_label }] : undefined,
+    reasonCode: exerciseEvent.name ? [{ text: exerciseEvent.name }] : undefined,
     period: { start: exerciseEvent.start_dt, end: exerciseEvent.end_dt },
   };
 }
