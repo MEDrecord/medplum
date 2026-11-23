@@ -152,6 +152,12 @@ export interface MedplumServerConfig {
   gatewayTenantId?: string;
   /** Default project ID for Gateway-authenticated users */
   defaultProjectId?: string;
+  /**
+   * Comma-separated email addresses that are logged in to the Super Admin project (as its admin)
+   * when they arrive through the gateway, instead of the default project. Exact, case-insensitive.
+   * MEDPLUM_GATEWAY_SUPER_ADMIN_EMAILS. Empty or unset: nobody is.
+   */
+  gatewaySuperAdminEmails?: string;
 
   /** Optional config for Fission.io bots */
   fission?: MedplumFissionConfig;
