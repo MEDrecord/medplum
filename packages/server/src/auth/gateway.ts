@@ -176,8 +176,22 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
   }
 
   // --- Step 2: Resolve project ---
-  // Priority: explicit body param > config env var > first non-system project from DB
-  let projectId = req.body.projectId || config.defaultProjectId;
+  // A listed super admin goes to the Super Admin project, as its admin: in Medplum, super-admin
+  // rights are exactly "logged in to the project marked superAdmin". Everyone else:
+  // explicit body param > config env var > first non-system project from DB.
+  const isSuperAdmin = isGatewaySuperAdmin(userInfo.email, config.gatewaySuperAdminEmails);
+  let projectId: string | undefined;
+  if (isSuperAdmin) {
+    projectId = await resolveSuperAdminProjectId();
+    if (projectId) {
+      logger.info('Gateway login: listed super admin, using the Super Admin project', { userId: userInfo.id });
+    } else {
+      logger.warn('Gateway login: listed super admin, but no Super Admin project exists', { userId: userInfo.id });
+    }
+  }
+  if (!projectId) {
+    projectId = req.body.projectId || config.defaultProjectId;
+  }
   if (!projectId) {
     projectId = await resolveDefaultProjectId();
   }
@@ -240,11 +254,18 @@ export async function gatewayLoginHandler(req: Request, res: Response): Promise<
         { code: 'project', operator: Operator.EQUALS, value: `Project/${projectId}` },
       ],
     });
+    const grantAdmin = isSuperAdmin && project.superAdmin === true;
     if (!membership) {
       membership = await createProjectMembership(systemRepo, user, project, practitioner as WithId<ProfileResource>, {
         externalId: userInfo.id,
+        ...(grantAdmin ? { admin: true } : {}),
       });
-      logger.info('Gateway: created ProjectMembership', { membershipId: membership.id });
+      logger.info('Gateway: created ProjectMembership', { membershipId: membership.id, admin: grantAdmin });
+    } else if (grantAdmin && !membership.admin) {
+      membership = await systemRepo.updateResource<ProjectMembership>({ ...membership, admin: true });
+      logger.info('Gateway: made a listed super admin admin of the Super Admin project', {
+        membershipId: membership.id,
+      });
     }
 
     // --- Step 6: Create Login + generate tokens ---
@@ -435,6 +456,40 @@ function getLastName(name: string | undefined): string {
  * Cache for the default project ID so we don't query on every request.
  */
 let cachedDefaultProjectId: string | undefined;
+let cachedSuperAdminProjectId: string | undefined;
+
+/** Is this address on the gateway super-admin list? Exact match, case-insensitive. */
+export function isGatewaySuperAdmin(email: string | undefined, list: string | undefined): boolean {
+  const value = (email ?? '').trim().toLowerCase();
+  if (!value) {
+    return false;
+  }
+  return (list ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(value);
+}
+
+/** The project marked superAdmin (the seeded "Super Admin" project). Cached for the process. */
+export async function resolveSuperAdminProjectId(): Promise<string | undefined> {
+  if (cachedSuperAdminProjectId) {
+    return cachedSuperAdminProjectId;
+  }
+  try {
+    const projects = await getGlobalSystemRepo().searchResources<Project>({
+      resourceType: 'Project',
+      count: 50,
+      sortRules: [{ code: '_lastUpdated', descending: false }],
+    });
+    const project = projects.find((p) => p.superAdmin === true);
+    cachedSuperAdminProjectId = project?.id;
+    return cachedSuperAdminProjectId;
+  } catch (err) {
+    getLogger().warn('Gateway: failed to resolve the Super Admin project', { error: String(err) });
+    return undefined;
+  }
+}
 
 /**
  * Resolve the default project from the database.
