@@ -79,6 +79,8 @@ moxActivityRouter.post('/', async (req: Request, res: Response) => {
       sessions.set(record.MeasurementId, sessionRecords);
     }
 
+    const deviceIds: string[] = [];
+    const encounterIds: string[] = [];
     const observationIds: string[] = [];
     for (const sessionRecords of sessions.values()) {
       const device = await upsertByIdentifier(
@@ -86,15 +88,19 @@ moxActivityRouter.post('/', async (req: Request, res: Response) => {
         createDevice(sessionRecords[0]),
         MOX_SERIAL_SYSTEM,
         sessionRecords[0].MoxName,
-        projectId
+        projectId,
+        ['patient']
       );
       const encounter = await upsertByIdentifier(
         repo,
         createEncounter(sessionRecords),
         MOX_SESSION_SYSTEM,
         sessionRecords[0].MeasurementId,
-        projectId
+        projectId,
+        ['subject']
       );
+      deviceIds.push(device.id);
+      encounterIds.push(encounter.id);
 
       for (const record of sessionRecords) {
         const observation = await upsertByIdentifier(
@@ -102,7 +108,8 @@ moxActivityRouter.post('/', async (req: Request, res: Response) => {
           createObservation(record, device, encounter),
           MOX_MEASUREMENT_SYSTEM,
           `${record.MeasurementId}-${record.Day}`,
-          projectId
+          projectId,
+          ['subject']
         );
         observationIds.push(observation.id);
       }
@@ -111,6 +118,8 @@ moxActivityRouter.post('/', async (req: Request, res: Response) => {
     getLogger().info('Stored Mox activity records', {
       resolvedProjectId: projectId,
       recordCount: records.length,
+      deviceIds,
+      encounterIds,
       observationIds,
     });
 
@@ -121,12 +130,21 @@ moxActivityRouter.post('/', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Upserts a resource by a business identifier.
+ *
+ * `preserveFields` lists fields that Mox itself never supplies (e.g. a manually-added
+ * patient link). When an existing resource is found, those fields are carried over from
+ * the existing resource so a later sync of the same identifier doesn't clobber a manual
+ * edit -- `updateResource` is a full FHIR replace, not a merge.
+ */
 async function upsertByIdentifier<T extends Resource>(
   repo: SystemRepository,
   resource: T,
   system: string,
   value: string,
-  projectId: string
+  projectId: string,
+  preserveFields: (keyof T)[] = []
 ): Promise<WithId<T>> {
   const existing = await repo.searchOne<T>({
     resourceType: resource.resourceType,
@@ -137,7 +155,13 @@ async function upsertByIdentifier<T extends Resource>(
   });
 
   if (existing) {
-    return repo.updateResource({ ...resource, id: existing.id });
+    const merged: T = { ...resource, id: existing.id };
+    for (const field of preserveFields) {
+      if (existing[field] !== undefined) {
+        merged[field] = existing[field];
+      }
+    }
+    return repo.updateResource(merged);
   }
   return repo.createResource({ ...resource, meta: { ...resource.meta, project: projectId } });
 }
