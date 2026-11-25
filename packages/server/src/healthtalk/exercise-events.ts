@@ -26,6 +26,7 @@ interface ExerciseEvent {
   start_dt: string;
   end_dt: string;
   type_label: string;
+  name?: string;
 }
 
 interface Athlete {
@@ -83,7 +84,7 @@ exerciseEventsRouter.post('/', async (req: Request, res: Response) => {
   }
 
   const config = getConfig();
-  const projectId = gatewayHeaders.tenantId || config.defaultProjectId || (await resolveDefaultProjectId());
+  const projectId = config.defaultProjectId || (await resolveDefaultProjectId());
   if (!projectId) {
     sendOutcome(res, badRequest('No project configured for exercise event storage'));
     return;
@@ -94,14 +95,37 @@ exerciseEventsRouter.post('/', async (req: Request, res: Response) => {
     const project = await globalSystemRepo.readResource<Project>('Project', projectId);
     const repo = await getProjectSystemRepo(project);
 
-    const patient = await upsertByIdentifier(repo, createPatient(athlete), ATHLETE_ID_SYSTEM, String(athlete.id));
-    const encounter = await upsertByIdentifier(repo, createEncounter(event), EVENT_ID_SYSTEM, String(event.id));
+    const patient = await upsertByIdentifier(
+      repo,
+      createPatient(athlete),
+      ATHLETE_ID_SYSTEM,
+      String(athlete.id),
+      projectId
+    );
+    const encounter = await upsertByIdentifier(
+      repo,
+      createEncounter(event),
+      EVENT_ID_SYSTEM,
+      String(event.id),
+      projectId
+    );
     const observation = await upsertByIdentifier(
       repo,
       createObservation(statistic, patient, encounter),
       STATISTIC_ID_SYSTEM,
-      String(statistic.id)
+      String(statistic.id),
+      projectId
     );
+
+    getLogger().info('Stored exercise event', {
+      resolvedProjectId: projectId,
+      athleteId: String(athlete.id),
+      eventId: String(event.id),
+      statisticId: String(statistic.id),
+      patientId: patient.id,
+      encounterId: encounter.id,
+      observationId: observation.id,
+    });
 
     res.status(200).json({
       patient: { id: patient.id },
@@ -109,7 +133,7 @@ exerciseEventsRouter.post('/', async (req: Request, res: Response) => {
       observation: { id: observation.id },
     });
   } catch (err) {
-    getLogger().error('Failed to store exercise event', { error: err });
+    getLogger().error('Failed to store exercise event', { error: err, resolvedProjectId: projectId });
     sendOutcome(res, badRequest('Failed to store exercise event'));
   }
 });
@@ -118,17 +142,21 @@ async function upsertByIdentifier<T extends Resource>(
   repo: SystemRepository,
   resource: T,
   system: string,
-  value: string
+  value: string,
+  projectId: string
 ): Promise<WithId<T>> {
   const existing = await repo.searchOne<T>({
     resourceType: resource.resourceType,
-    filters: [{ code: 'identifier', operator: Operator.EQUALS, value: `${system}|${value}` }],
+    filters: [
+      { code: 'identifier', operator: Operator.EQUALS, value: `${system}|${value}` },
+      { code: '_project', operator: Operator.EQUALS, value: projectId },
+    ],
   });
 
   if (existing) {
     return repo.updateResource({ ...resource, id: existing.id });
   }
-  return repo.createResource(resource);
+  return repo.createResource({ ...resource, meta: { ...resource.meta, project: projectId } });
 }
 
 function createPatient(athlete: Athlete): Patient {
@@ -156,6 +184,7 @@ function createEncounter(exerciseEvent: ExerciseEvent): Encounter {
     class: { system: 'http://terminology.hl7.org/CodeSystem/v3-ActCode', code: 'AMB', display: 'ambulatory' },
     identifier: [{ system: EVENT_ID_SYSTEM, value: String(exerciseEvent.id) }],
     type: exerciseEvent.type_label ? [{ text: exerciseEvent.type_label }] : undefined,
+    reasonCode: exerciseEvent.name ? [{ text: exerciseEvent.name }] : undefined,
     period: { start: exerciseEvent.start_dt, end: exerciseEvent.end_dt },
   };
 }

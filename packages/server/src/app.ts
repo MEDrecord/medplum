@@ -39,6 +39,7 @@ import { loadStructureDefinitions } from './fhir/structure';
 import { fhircastSTU2Router, fhircastSTU3Router } from './fhircast/routes';
 import { cleanupReservedDatabaseConnections, healthcheckHandler } from './healthcheck';
 import { exerciseEventsRouter } from './healthtalk/exercise-events';
+import { moxActivityRouter } from './healthtalk/mox-activity';
 import { cleanupHeartbeat, initHeartbeat } from './heartbeat';
 import { hl7BodyParser } from './hl7/parser';
 import { keyValueRouter } from './keyvalue/routes';
@@ -223,6 +224,7 @@ export async function initApp(app: Express, config: MedplumServerConfig): Promis
   apiRouter.use('/fhircast/STU2/', fhircastSTU2Router);
   apiRouter.use('/fhircast/STU3/', fhircastSTU3Router);
   apiRouter.use('/healthtalk/exercise-events/', exerciseEventsRouter);
+  apiRouter.use('/healthtalk/mox-activity/', moxActivityRouter);
   apiRouter.use('/keyvalue/v1/', keyValueRouter);
   apiRouter.use('/oauth2/', oauthRouter);
   apiRouter.use('/scim/v2/', scimRouter);
